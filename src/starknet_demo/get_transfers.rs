@@ -37,3 +37,37 @@ enum TransactionType {
     ERC1155Batch,
     Other,
 }
+
+fn get_tx_type(event: &Event) -> TransactionType {
+    if event.keys.contains(&ERC721_TRANSFER_EVENT) {
+        TransactionType::ERC721
+    } else if event.keys.contains(&ERC1155_TRANSFER_EVENT) {
+        TransactionType::ERC1155
+    } else if event.keys.contains(&ERC1155_TRANSFER_BATCH_EVENT) {
+        TransactionType::ERC1155Batch
+    } else {
+        TransactionType::Other
+    }
+}
+
+pub async fn run() {
+    let provider = SequencerGatewayProvider::starknet_alpha_goerli_2();
+
+    let block = provider.get_block(BlockId::Latest).await.unwrap();
+    for receipt in block.transaction_receipts.iter() {
+        for event in receipt.events.iter() {
+            match get_tx_type(&event) {
+                TransactionType::ERC721 => {
+                    dbg!(TransactionType::ERC721, event);
+                },
+                TransactionType::ERC1155 => {
+                    dbg!(TransactionType::ERC1155, event);
+                },
+                TransactionType::ERC1155Batch => {
+                    dbg!(TransactionType::ERC1155Batch, event);
+                },
+                _ => {}
+            }
+        }
+    }
+}
