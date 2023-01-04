@@ -1,5 +1,7 @@
+use std::collections::HashSet;
+
 use starknet::{
-    core::types::{BlockId, Event, FieldElement},
+    core::types::{AbiEntry, BlockId, Event, FieldElement},
     macros::{felt, felt_hex},
     providers::{self, Provider, SequencerGatewayProvider},
 };
@@ -12,22 +14,20 @@ const ERC721_TRANSFER_EVENT: FieldElement = FieldElement::from_mont([
     242125613396778233,
 ]);
 
-/// TODO: Update
-/// felt!("0xdeadbeef");
+/// felt!("0x182d859c0807ba9db63baf8b9d9fdbfeb885d820be6e206b9dab626d995c433");
 const ERC1155_TRANSFER_EVENT: FieldElement = FieldElement::from_mont([
-    18446743954159837729,
-    18446744073709551615,
-    18446744073709551615,
-    576458719958287408,
+    1986363494579022220,
+    17146673375846491535,
+    6125027481420860397,
+    307829215948623223,
 ]);
 
-/// TODO: Update
-/// felt!("0xdeadbeef");
+/// felt!("0x2563683c757f3abe19c4b7237e2285d8993417ddffe0b54a19eb212ea574b08");
 const ERC1155_TRANSFER_BATCH_EVENT: FieldElement = FieldElement::from_mont([
-    18446743954159837729,
-    18446744073709551615,
-    18446744073709551615,
-    576458719958287408,
+    14114721770411318090,
+    10106114908748783105,
+    12894248477188639378,
+    518981439849896716,
 ]);
 
 #[derive(Debug)]
@@ -51,21 +51,63 @@ fn get_tx_type(event: &Event) -> TransactionType {
 }
 
 pub async fn run() {
-    let provider = SequencerGatewayProvider::starknet_alpha_goerli_2();
+    let provider = SequencerGatewayProvider::starknet_alpha_mainnet();
 
-    let block = provider.get_block(BlockId::Latest).await.unwrap();
+    // TODO: Replace it with database
+    let mut blacklist: HashSet<FieldElement> = HashSet::new();
+
+    let block = provider
+        .get_block(BlockId::Hash(felt!(
+            "0x02e0a6d54949d54165978adabdc29d2cce780748954668e18784ee34db2c01da"
+        )))
+        .await
+        .unwrap();
     for receipt in block.transaction_receipts.iter() {
         for event in receipt.events.iter() {
+            if blacklist.contains(&event.from_address) {
+                continue;
+            }
+
             match get_tx_type(&event) {
                 TransactionType::ERC721 => {
-                    dbg!(TransactionType::ERC721, event);
-                },
+                    // Get abi
+                    let abi = provider
+                        .get_code(
+                            event.from_address,
+                            BlockId::Number(block.block_number.unwrap()),
+                        )
+                        .await
+                        .unwrap()
+                        .abi
+                        .unwrap();
+
+                    let is_erc721 = abi
+                        .iter()
+                        // Filter out non-function entries
+                        .filter(|abi_entry| match abi_entry {
+                            AbiEntry::Function(_) => true,
+                            _ => false,
+                        })
+                        // Get the function name
+                        .map(|fn_entry| match fn_entry {
+                            AbiEntry::Function(fn_entry) => &fn_entry.name,
+                            _ => unreachable!(),
+                        })
+                        // Check if the function name is "ownerOf"
+                        .any(|fn_name| fn_name == "ownerOf" || fn_name == "owner_of");
+
+                    if is_erc721 {
+                        dbg!(TransactionType::ERC721, event);
+                    } else {
+                        blacklist.insert(event.from_address);
+                    }
+                }
                 TransactionType::ERC1155 => {
                     dbg!(TransactionType::ERC1155, event);
-                },
+                }
                 TransactionType::ERC1155Batch => {
                     dbg!(TransactionType::ERC1155Batch, event);
-                },
+                }
                 _ => {}
             }
         }
