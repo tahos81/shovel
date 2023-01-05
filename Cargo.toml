@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 tokio = { version = "1.23.0", features = ["full"] }
 starknet = { git = "https://github.com/xJonathanLEI/starknet-rs" }
+mongodb = { version = "2.3.1" }

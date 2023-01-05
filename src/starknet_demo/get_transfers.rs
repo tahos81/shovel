@@ -2,12 +2,12 @@ use std::collections::HashSet;
 
 use starknet::{
     core::types::{AbiEntry, BlockId, Event, FieldElement},
-    macros::{felt, felt_hex},
-    providers::{self, Provider, SequencerGatewayProvider},
+    macros::felt,
+    providers::{Provider, SequencerGatewayProvider},
 };
 
 /// felt!("0x99cd8bde557814842a3121e8ddfd433a539b8c9f14bf31ebf108d12e6196e9");
-const ERC721_TRANSFER_EVENT: FieldElement = FieldElement::from_mont([
+const TRANSFER_EVENT_KEY: FieldElement = FieldElement::from_mont([
     10370298062762752593,
     7288672513944573579,
     6148261015514870755,
@@ -15,7 +15,7 @@ const ERC721_TRANSFER_EVENT: FieldElement = FieldElement::from_mont([
 ]);
 
 /// felt!("0x182d859c0807ba9db63baf8b9d9fdbfeb885d820be6e206b9dab626d995c433");
-const ERC1155_TRANSFER_EVENT: FieldElement = FieldElement::from_mont([
+const TRANSFER_SINGLE_EVENT_KEY: FieldElement = FieldElement::from_mont([
     1986363494579022220,
     17146673375846491535,
     6125027481420860397,
@@ -23,7 +23,7 @@ const ERC1155_TRANSFER_EVENT: FieldElement = FieldElement::from_mont([
 ]);
 
 /// felt!("0x2563683c757f3abe19c4b7237e2285d8993417ddffe0b54a19eb212ea574b08");
-const ERC1155_TRANSFER_BATCH_EVENT: FieldElement = FieldElement::from_mont([
+const TRANSFER_BATCH_EVENT_KEY: FieldElement = FieldElement::from_mont([
     14114721770411318090,
     10106114908748783105,
     12894248477188639378,
@@ -32,19 +32,19 @@ const ERC1155_TRANSFER_BATCH_EVENT: FieldElement = FieldElement::from_mont([
 
 #[derive(Debug)]
 enum TransactionType {
-    ERC721,
-    ERC1155,
-    ERC1155Batch,
+    Transfer,
+    TransferSingle,
+    TransferBatch,
     Other,
 }
 
 fn get_tx_type(event: &Event) -> TransactionType {
-    if event.keys.contains(&ERC721_TRANSFER_EVENT) {
-        TransactionType::ERC721
-    } else if event.keys.contains(&ERC1155_TRANSFER_EVENT) {
-        TransactionType::ERC1155
-    } else if event.keys.contains(&ERC1155_TRANSFER_BATCH_EVENT) {
-        TransactionType::ERC1155Batch
+    if event.keys.contains(&TRANSFER_EVENT_KEY) {
+        TransactionType::Transfer
+    } else if event.keys.contains(&TRANSFER_SINGLE_EVENT_KEY) {
+        TransactionType::TransferSingle
+    } else if event.keys.contains(&TRANSFER_BATCH_EVENT_KEY) {
+        TransactionType::TransferBatch
     } else {
         TransactionType::Other
     }
@@ -62,14 +62,14 @@ pub async fn run() {
         )))
         .await
         .unwrap();
-    for receipt in block.transaction_receipts.iter() {
+    for receipt in block.transaction_receipts {
         for event in receipt.events.iter() {
             if blacklist.contains(&event.from_address) {
                 continue;
             }
 
             match get_tx_type(&event) {
-                TransactionType::ERC721 => {
+                TransactionType::Transfer => {
                     // Get abi
                     let abi = provider
                         .get_code(
@@ -97,16 +97,16 @@ pub async fn run() {
                         .any(|fn_name| fn_name == "ownerOf" || fn_name == "owner_of");
 
                     if is_erc721 {
-                        dbg!(TransactionType::ERC721, event);
+                        dbg!(TransactionType::Transfer, event);
                     } else {
                         blacklist.insert(event.from_address);
                     }
                 }
-                TransactionType::ERC1155 => {
-                    dbg!(TransactionType::ERC1155, event);
+                TransactionType::TransferSingle => {
+                    dbg!(TransactionType::TransferSingle, event);
                 }
-                TransactionType::ERC1155Batch => {
-                    dbg!(TransactionType::ERC1155Batch, event);
+                TransactionType::TransferBatch => {
+                    dbg!(TransactionType::TransferBatch, event);
                 }
                 _ => {}
             }
