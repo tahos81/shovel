@@ -10,3 +10,4 @@ tokio = { version = "1.23.0", features = ["full"] }
 starknet = { git = "https://github.com/xJonathanLEI/starknet-rs" }
 mongodb = { version = "2.3.1" }
 reqwest = { version = "0.11.13" }
+dotenv = "0.15.0"
