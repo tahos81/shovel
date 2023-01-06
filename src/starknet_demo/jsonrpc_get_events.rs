@@ -1,6 +1,6 @@
 use starknet::core::types::FieldElement;
 use starknet::providers::jsonrpc::models::ContractAbiEntry::Function;
-use starknet::providers::jsonrpc::models::EventsPage;
+use starknet::providers::jsonrpc::models::{EmittedEvent, EventsPage};
 use starknet::providers::jsonrpc::{
     models::BlockId, models::EventFilter, HttpTransport, JsonRpcClient,
 };
@@ -34,8 +34,10 @@ const TRANSFER_BATCH_EVENT_KEY: FieldElement = FieldElement::from_mont([
     518981439849896716,
 ]);
 
-pub async fn run() {
+pub async fn run() -> Vec<EmittedEvent> {
     dotenv().ok();
+
+    let mut ret: Vec<EmittedEvent> = Vec::new();
 
     //TODO: Replace it with database
     let mut whitelist: HashSet<FieldElement> = HashSet::new();
@@ -77,21 +79,22 @@ pub async fn run() {
                 //possible ERC721
                 let address = event.from_address;
                 if whitelist.contains(&address) {
-                    dbg!(event);
+                    //dbg!(event);
                     continue;
                 } else if blacklist.contains(&address) {
                     continue;
                 } else {
                     if is_erc721(address, BlockId::Number(event.block_number), &rpc).await {
                         whitelist.insert(address);
-                        dbg!(event);
+                        ret.push(event);
+                        //dbg!(event);
                     } else {
                         blacklist.insert(address);
                     }
                 }
             } else {
                 //definitely ERC1155
-                dbg!(event);
+                //dbg!(event);
             }
         }
 
@@ -101,6 +104,8 @@ pub async fn run() {
             break;
         }
     }
+
+    ret
 }
 
 async fn is_erc721(
