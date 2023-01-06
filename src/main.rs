@@ -13,6 +13,6 @@ async fn main() {
     let client_options = ClientOptions::parse(client_url_with_options).await.unwrap();
 
     let client = Client::with_options(client_options).unwrap();
-    let erc721_tokens = client.database("erc721_tokens");
+    let shovel_db = client.database("shovel");
     starknet_demo::jsonrpc_get_events::run().await;
 }
