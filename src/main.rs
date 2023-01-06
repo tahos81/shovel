@@ -1,7 +1,7 @@
 mod starknet_demo;
 
 use ::dotenv::dotenv;
-use mongodb::{options::ClientOptions, *};
+use mongodb::{bson::Document, options::ClientOptions, *};
 use std::env;
 
 #[tokio::main]
@@ -14,5 +14,9 @@ async fn main() {
 
     let client = Client::with_options(client_options).unwrap();
     let shovel_db = client.database("shovel");
+
+    let erc721_collection: Collection<Document> = shovel_db.collection("erc721_tokens");
+    let erc1155_collection: Collection<Document> = shovel_db.collection("erc1155_tokens");
+    let contract_collection: Collection<Document> = shovel_db.collection("contracts");
     starknet_demo::jsonrpc_get_events::run().await;
 }
