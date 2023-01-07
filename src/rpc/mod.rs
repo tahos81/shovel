@@ -101,13 +101,10 @@ async fn is_erc721(
         .unwrap();
 
     for abi_entry in abi {
-        match abi_entry {
-            Function(function_abi_entry) => {
-                if function_abi_entry.name == "ownerOf" || function_abi_entry.name == "owner_of" {
-                    return true;
-                }
+        if let Function(function_abi_entry) = abi_entry {
+            if function_abi_entry.name == "ownerOf" || function_abi_entry.name == "owner_of" {
+                return true;
             }
-            _ => {}
         }
     }
 
