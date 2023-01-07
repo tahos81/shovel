@@ -1,47 +1,15 @@
-mod starknet_demo;
+mod db;
+mod rpc;
 
-use ::dotenv::dotenv;
-use mongodb::{options::ClientOptions, *};
-use serde::{self, Deserialize, Serialize};
-use starknet::{core::types::FieldElement, providers::jsonrpc::models::BlockId};
-use std::env;
+use db::document::*;
+use mongodb::Collection;
 
 #[tokio::main]
 async fn main() {
-    pub struct AddressAtBlock {
-        address: FieldElement,
-        block: BlockId,
-    }
+    let shovel_db = db::connect().await;
 
-    #[derive(Debug, Deserialize, Serialize)]
-    struct Contract {
-        address: FieldElement,
-        name: String,
-        symbol: String,
-    }
-
-    #[derive(Debug, Deserialize, Serialize)]
-    struct ERC721 {
-        token_id: FieldElement,
-        contract: Contract,
-        owner: FieldElement,
-        previous_owners: Vec<FieldElement>, // switch to AddressAtBlock
-        token_uri: String,
-    }
-
-    dotenv().ok();
-
-    let client_url_with_options =
-        env::var("CLIENT_URL_WITH_OPTIONS").expect("configure your .env file");
-    let client_options = ClientOptions::parse(client_url_with_options).await.unwrap();
-
-    let client = Client::with_options(client_options).unwrap();
-    let shovel_db = client.database("shovel");
-
-    //let erc721_collection: Collection<ERC721> = shovel_db.collection("erc721_tokens");
-    //let erc1155_collection: Collection<Document> = shovel_db.collection("erc1155_tokens");
     let contract_collection: Collection<Contract> = shovel_db.collection("contracts");
-    let erc721_events = starknet_demo::jsonrpc_get_events::run().await;
+    let erc721_events = rpc::get_transfers().await;
 
     for event in erc721_events {
         let erc721_contract = Contract {
