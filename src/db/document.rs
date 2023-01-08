@@ -1,26 +1,32 @@
+use mongodb::bson::doc;
 use serde::{self, Deserialize, Serialize};
 use starknet::{core::types::FieldElement, providers::jsonrpc::models::EmittedEvent};
 
 #[derive(Debug, Deserialize, Serialize)]
-struct AddressAtBlock {
+pub struct AddressAtBlock {
     address: FieldElement,
     block: u64,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+pub struct Erc721ID {
+    pub token_id: FieldElement,
+    pub contract_address: FieldElement,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Contract {
-    pub address: FieldElement,
+    pub _id: FieldElement,
     pub name: Option<String>,
     pub symbol: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ERC721 {
-    token_id: FieldElement,
-    contract: Contract,
-    owner: FieldElement,
-    previous_owners: Vec<AddressAtBlock>,
-    token_uri: String,
+    pub _id: Erc721ID,
+    pub owner: FieldElement,
+    pub previous_owners: Option<Vec<AddressAtBlock>>,
+    pub token_uri: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -32,14 +38,12 @@ pub struct ERC1155 {
     uri: String,
 }
 
-impl From<EmittedEvent> for Contract {
-    fn from(event: EmittedEvent) -> Self {
+impl From<&EmittedEvent> for Contract {
+    fn from(event: &EmittedEvent) -> Self {
         Self {
-            address: event.from_address,
+            _id: event.from_address,
             name: None,
             symbol: None,
         }
     }
 }
-
-// TODO: implement From trait for ERC721 and ERC1155
