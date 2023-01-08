@@ -1,18 +1,37 @@
-mod event_keys;
+mod starknet_constants;
 
 use starknet::core::types::FieldElement;
 use starknet::providers::jsonrpc::models::ContractAbiEntry::Function;
-use starknet::providers::jsonrpc::models::{EmittedEvent, EventsPage};
+use starknet::providers::jsonrpc::models::{EmittedEvent, EventsPage, FunctionCall};
 use starknet::providers::jsonrpc::{
     models::BlockId, models::EventFilter, HttpTransport, JsonRpcClient,
 };
 
-use event_keys::*;
+use starknet_constants::*;
 
 use dotenv::dotenv;
 use reqwest::Url;
 use std::collections::HashSet;
 use std::env;
+use std::str;
+
+trait AsciiExt {
+    fn to_ascii(&self) -> String;
+}
+
+impl AsciiExt for FieldElement {
+    fn to_ascii(&self) -> String {
+        str::from_utf8(&self.to_bytes_be())
+            .unwrap()
+            .trim_start_matches("\0")
+            .to_string()
+    }
+}
+
+async fn setup_rpc() -> JsonRpcClient<HttpTransport> {
+    let rpc_url = env::var("STARKNET_MAINNET_RPC").expect("configure your .env file");
+    JsonRpcClient::new(HttpTransport::new(Url::parse(&rpc_url).unwrap()))
+}
 
 pub async fn get_transfers() -> Vec<EmittedEvent> {
     dotenv().ok();
@@ -23,8 +42,7 @@ pub async fn get_transfers() -> Vec<EmittedEvent> {
     let mut whitelist: HashSet<FieldElement> = HashSet::new();
     let mut blacklist: HashSet<FieldElement> = HashSet::new();
 
-    let rpc_url = env::var("STARKNET_MAINNET_RPC").expect("configure your .env file");
-    let rpc = JsonRpcClient::new(HttpTransport::new(Url::parse(&rpc_url).unwrap()));
+    let rpc = setup_rpc().await;
 
     let keys: Vec<FieldElement> = Vec::from([
         TRANSFER_EVENT_KEY,
@@ -53,7 +71,6 @@ pub async fn get_transfers() -> Vec<EmittedEvent> {
             .get_events(filter.clone(), continuation_token, chunk_size)
             .await
             .unwrap();
-
         for event in events.events {
             if event.keys.contains(&TRANSFER_EVENT_KEY) {
                 //possible ERC721
@@ -109,4 +126,21 @@ async fn is_erc721(
     }
 
     false
+}
+
+async fn get_name(
+    address: FieldElement,
+    block_id: BlockId,
+    rpc: &JsonRpcClient<HttpTransport>,
+) -> String {
+    let request = FunctionCall {
+        contract_address: address,
+        entry_point_selector: NAME_SELECTOR,
+        calldata: vec![],
+    };
+
+    let result = rpc.call(request, &block_id).await.unwrap();
+    let result_felt = result.get(0).unwrap();
+
+    result_felt.to_ascii()
 }

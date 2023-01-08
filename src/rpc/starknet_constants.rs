@@ -23,3 +23,10 @@ pub const TRANSFER_BATCH_EVENT_KEY: FieldElement = FieldElement::from_mont([
     12894248477188639378,
     518981439849896716,
 ]);
+
+pub const NAME_SELECTOR: FieldElement = FieldElement::from_mont([
+    4539611826636167848,
+    2380157814635835479,
+    16059280649635539212,
+    204437639094763333,
+]);

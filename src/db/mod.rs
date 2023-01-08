@@ -1,8 +1,10 @@
 pub mod document;
 
 use dotenv::dotenv;
-use mongodb::{options::ClientOptions, Client, Database};
+use mongodb::{options::ClientOptions, Client, Collection, Database};
 use std::env;
+
+use self::document::ERC721;
 
 pub async fn connect() -> Database {
     dotenv().ok();
@@ -13,4 +15,9 @@ pub async fn connect() -> Database {
 
     let client = Client::with_options(client_options).unwrap();
     client.database("shovel")
+}
+
+pub async fn write_erc721(db: Database, erc721: ERC721) {
+    let collection: Collection<ERC721> = db.collection("erc721_tokens");
+    collection.insert_one(erc721, None).await.unwrap();
 }

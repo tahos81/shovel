@@ -1,5 +1,5 @@
 use serde::{self, Deserialize, Serialize};
-use starknet::core::types::FieldElement;
+use starknet::{core::types::FieldElement, providers::jsonrpc::models::EmittedEvent};
 
 #[derive(Debug, Deserialize, Serialize)]
 struct AddressAtBlock {
@@ -10,8 +10,8 @@ struct AddressAtBlock {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Contract {
     pub address: FieldElement,
-    pub name: String,
-    pub symbol: String,
+    pub name: Option<String>,
+    pub symbol: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -21,4 +21,23 @@ pub struct ERC721 {
     owner: FieldElement,
     previous_owners: Vec<AddressAtBlock>,
     token_uri: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ERC1155 {
+    token_id: FieldElement,
+    amount: FieldElement,
+    contract: Contract,
+    owner: FieldElement,
+    uri: String,
+}
+
+impl From<EmittedEvent> for Contract {
+    fn from(event: EmittedEvent) -> Self {
+        Self {
+            address: event.from_address,
+            name: None,
+            symbol: None,
+        }
+    }
 }
