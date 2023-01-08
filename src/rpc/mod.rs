@@ -2,18 +2,18 @@ mod starknet_constants;
 
 use starknet::core::types::FieldElement;
 use starknet::providers::jsonrpc::models::ContractAbiEntry::Function;
-use starknet::providers::jsonrpc::models::{EmittedEvent, EventsPage, FunctionCall};
+use starknet::providers::jsonrpc::models::{EventsPage, FunctionCall};
 use starknet::providers::jsonrpc::{
     models::BlockId, models::EventFilter, HttpTransport, JsonRpcClient,
 };
 
+use crate::db::document::Contract;
+use crate::db::{self, write_contract};
 use starknet_constants::*;
 
 use dotenv::dotenv;
 use reqwest::Url;
-use std::collections::HashSet;
-use std::env;
-use std::str;
+use std::{collections::HashSet, env, str};
 
 trait AsciiExt {
     fn to_ascii(&self) -> String;
@@ -33,16 +33,15 @@ async fn setup_rpc() -> JsonRpcClient<HttpTransport> {
     JsonRpcClient::new(HttpTransport::new(Url::parse(&rpc_url).unwrap()))
 }
 
-pub async fn get_transfers() -> Vec<EmittedEvent> {
+pub async fn get_transfers() {
     dotenv().ok();
-
-    let mut ret: Vec<EmittedEvent> = Vec::new();
 
     //TODO: Replace it with database
     let mut whitelist: HashSet<FieldElement> = HashSet::new();
     let mut blacklist: HashSet<FieldElement> = HashSet::new();
 
     let rpc = setup_rpc().await;
+    let db = db::connect().await;
 
     let keys: Vec<FieldElement> = Vec::from([
         TRANSFER_EVENT_KEY,
@@ -51,7 +50,7 @@ pub async fn get_transfers() -> Vec<EmittedEvent> {
     ]);
 
     let starting_block = 14791;
-    let block_range = 0;
+    let block_range = 50;
 
     let filter: EventFilter = EventFilter {
         from_block: Some(BlockId::Number(starting_block)),
@@ -83,8 +82,7 @@ pub async fn get_transfers() -> Vec<EmittedEvent> {
                 } else {
                     if is_erc721(address, BlockId::Number(event.block_number), &rpc).await {
                         whitelist.insert(address);
-                        ret.push(event);
-                        //dbg!(event);
+                        write_contract(&db, Contract::from(event)).await;
                     } else {
                         blacklist.insert(address);
                     }
@@ -101,8 +99,6 @@ pub async fn get_transfers() -> Vec<EmittedEvent> {
             break;
         }
     }
-
-    ret
 }
 
 async fn is_erc721(

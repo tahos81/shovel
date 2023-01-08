@@ -24,6 +24,7 @@ pub const TRANSFER_BATCH_EVENT_KEY: FieldElement = FieldElement::from_mont([
     518981439849896716,
 ]);
 
+/// felt!("0x361458367e696363fbcc70777d07ebbd2394e89fd0adcaf147faccd1d294d60");
 pub const NAME_SELECTOR: FieldElement = FieldElement::from_mont([
     4539611826636167848,
     2380157814635835479,
