@@ -1,10 +1,36 @@
 pub mod document;
 
+use async_trait::async_trait;
 use dotenv::dotenv;
 use mongodb::{options::ClientOptions, Client, Collection, Database};
 use std::env;
 
-use self::document::{Contract, ERC721};
+use self::document::{Contract, ERC1155, ERC721};
+
+#[async_trait]
+pub trait NftExt {
+    async fn insert_contract(&self, _: Contract) {}
+    async fn insert_erc721(&self, _: ERC721) {}
+    async fn insert_erc1155(&self, _: ERC1155) {}
+}
+
+#[async_trait]
+impl NftExt for Database {
+    async fn insert_contract(&self, contract: Contract) {
+        let collection: Collection<Contract> = self.collection("contracts");
+        collection.insert_one(contract, None).await.unwrap();
+    }
+
+    async fn insert_erc721(&self, erc721: ERC721) {
+        let collection: Collection<ERC721> = self.collection("erc721_tokens");
+        collection.insert_one(erc721, None).await.unwrap();
+    }
+
+    async fn insert_erc1155(&self, erc1155: ERC1155) {
+        let collection: Collection<ERC1155> = self.collection("erc1155_tokens");
+        collection.insert_one(erc1155, None).await.unwrap();
+    }
+}
 
 pub async fn connect() -> Database {
     dotenv().ok();
@@ -15,14 +41,4 @@ pub async fn connect() -> Database {
 
     let client = Client::with_options(client_options).unwrap();
     client.database("shovel")
-}
-
-pub async fn write_erc721(db: &Database, erc721: ERC721) {
-    let collection: Collection<ERC721> = db.collection("erc721_tokens");
-    collection.insert_one(erc721, None).await.unwrap();
-}
-
-pub async fn write_contract(db: &Database, contract: Contract) {
-    let collection: Collection<Contract> = db.collection("contracts");
-    collection.insert_one(contract, None).await.unwrap();
 }

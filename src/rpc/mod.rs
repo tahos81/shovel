@@ -7,8 +7,10 @@ use starknet::providers::jsonrpc::{
     models::BlockId, models::EventFilter, HttpTransport, JsonRpcClient,
 };
 
+use crate::db::NftExt;
+
+use crate::db;
 use crate::db::document::Contract;
-use crate::db::{self, write_contract};
 use starknet_constants::*;
 
 use dotenv::dotenv;
@@ -41,7 +43,7 @@ pub async fn get_transfers() {
     let mut blacklist: HashSet<FieldElement> = HashSet::new();
 
     let rpc = setup_rpc().await;
-    let db = db::connect().await;
+    let database = db::connect().await;
 
     let keys: Vec<FieldElement> = Vec::from([
         TRANSFER_EVENT_KEY,
@@ -82,7 +84,7 @@ pub async fn get_transfers() {
                 } else {
                     if is_erc721(address, BlockId::Number(event.block_number), &rpc).await {
                         whitelist.insert(address);
-                        write_contract(&db, Contract::from(event)).await;
+                        database.insert_contract(Contract::from(event)).await;
                     } else {
                         blacklist.insert(address);
                     }

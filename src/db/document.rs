@@ -41,3 +41,5 @@ impl From<EmittedEvent> for Contract {
         }
     }
 }
+
+// TODO: implement From trait for ERC721 and ERC1155
