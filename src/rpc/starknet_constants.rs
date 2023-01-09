@@ -1,5 +1,8 @@
 use starknet::core::types::FieldElement;
 
+/// felt!("0");
+pub const ZERO_ADDRESS: FieldElement = FieldElement::from_mont([0, 0, 0, 0]);
+
 /// felt!("0x99cd8bde557814842a3121e8ddfd433a539b8c9f14bf31ebf108d12e6196e9");
 pub const TRANSFER_EVENT_KEY: FieldElement = FieldElement::from_mont([
     10370298062762752593,

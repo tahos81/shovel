@@ -1,4 +1,4 @@
-mod starknet_constants;
+pub mod starknet_constants;
 
 use starknet::core::types::FieldElement;
 use starknet::providers::jsonrpc::models::ContractAbiEntry::Function;
@@ -9,7 +9,6 @@ use starknet::providers::jsonrpc::{
 
 use starknet_constants::*;
 
-use dotenv::dotenv;
 use reqwest::Url;
 use std::{env, str};
 
@@ -26,11 +25,16 @@ impl AsciiExt for FieldElement {
     }
 }
 
-pub async fn get_transfers_between(start_block: u64, range: u64) -> Vec<EmittedEvent> {
-    dotenv().ok();
+pub async fn setup_rpc() -> JsonRpcClient<HttpTransport> {
+    let rpc_url = env::var("STARKNET_MAINNET_RPC").expect("configure your .env file");
+    JsonRpcClient::new(HttpTransport::new(Url::parse(&rpc_url).unwrap()))
+}
 
-    let rpc = setup_rpc().await;
-
+pub async fn get_transfers_between(
+    start_block: u64,
+    range: u64,
+    rpc: &JsonRpcClient<HttpTransport>,
+) -> Vec<EmittedEvent> {
     let keys: Vec<FieldElement> = Vec::from([
         TRANSFER_EVENT_KEY,
         TRANSFER_SINGLE_EVENT_KEY,
@@ -66,12 +70,7 @@ pub async fn get_transfers_between(start_block: u64, range: u64) -> Vec<EmittedE
     }
 }
 
-async fn setup_rpc() -> JsonRpcClient<HttpTransport> {
-    let rpc_url = env::var("STARKNET_MAINNET_RPC").expect("configure your .env file");
-    JsonRpcClient::new(HttpTransport::new(Url::parse(&rpc_url).unwrap()))
-}
-
-async fn is_erc721(
+pub async fn is_erc721(
     address: FieldElement,
     block_id: BlockId,
     rpc: &JsonRpcClient<HttpTransport>,
@@ -94,7 +93,7 @@ async fn is_erc721(
     false
 }
 
-async fn get_name(
+pub async fn get_name(
     address: FieldElement,
     block_id: BlockId,
     rpc: &JsonRpcClient<HttpTransport>,
@@ -111,7 +110,7 @@ async fn get_name(
     result_felt.to_ascii()
 }
 
-async fn get_symbol(
+pub async fn get_symbol(
     address: FieldElement,
     block_id: BlockId,
     rpc: &JsonRpcClient<HttpTransport>,
@@ -128,7 +127,7 @@ async fn get_symbol(
     result_felt.to_ascii()
 }
 
-async fn get_token_uri(
+pub async fn get_token_uri(
     address: FieldElement,
     block_id: BlockId,
     rpc: &JsonRpcClient<HttpTransport>,
@@ -145,5 +144,3 @@ async fn get_token_uri(
 
     result_felt.to_ascii()
 }
-
-fn handle_erc721_event(event: EmittedEvent) {}
