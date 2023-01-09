@@ -1,3 +1,3 @@
 # db
 
-Module for reads and writes to database
+Module for reads and writes to database.

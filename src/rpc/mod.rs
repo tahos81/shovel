@@ -7,10 +7,6 @@ use starknet::providers::jsonrpc::{
     models::BlockId, models::EventFilter, HttpTransport, JsonRpcClient,
 };
 
-use crate::db::NftExt;
-
-use crate::db;
-use crate::db::document::{Contract, Erc721ID, ERC721};
 use starknet_constants::*;
 
 use dotenv::dotenv;
@@ -30,14 +26,10 @@ impl AsciiExt for FieldElement {
     }
 }
 
-pub async fn get_transfers() {
+pub async fn get_transfers_between(start_block: u64, range: u64) -> Vec<EmittedEvent> {
     dotenv().ok();
 
     let rpc = setup_rpc().await;
-    let database = db::connect().await;
-
-    let starting_block = 14791;
-    let block_range = 50;
 
     let keys: Vec<FieldElement> = Vec::from([
         TRANSFER_EVENT_KEY,
@@ -46,8 +38,8 @@ pub async fn get_transfers() {
     ]);
 
     let transfer_filter: EventFilter = EventFilter {
-        from_block: Some(BlockId::Number(starting_block)),
-        to_block: Some(BlockId::Number(starting_block + block_range)),
+        from_block: Some(BlockId::Number(start_block)),
+        to_block: Some(BlockId::Number(start_block + range)),
         address: None,
         keys: Some(keys),
     };
@@ -55,26 +47,21 @@ pub async fn get_transfers() {
     let mut continuation_token: Option<String> = None;
     let chunk_size: u64 = 1024;
 
-    let mut events: EventsPage;
+    let mut events_resp: EventsPage;
+    let mut events: Vec<EmittedEvent> = Vec::new();
 
     loop {
-        events = rpc
+        events_resp = rpc
             .get_events(transfer_filter.clone(), continuation_token, chunk_size)
             .await
             .unwrap();
 
-        for event in events.events {
-            if event.keys.contains(&TRANSFER_EVENT_KEY) {
-                //possible ERC721
-            } else {
-                //definitely ERC1155
-            }
-        }
+        events.append(&mut events_resp.events);
 
-        continuation_token = events.continuation_token;
+        continuation_token = events_resp.continuation_token;
 
         if continuation_token.is_none() {
-            break;
+            break events;
         }
     }
 }
@@ -116,6 +103,41 @@ async fn get_name(
         contract_address: address,
         entry_point_selector: NAME_SELECTOR,
         calldata: vec![],
+    };
+
+    let result = rpc.call(request, &block_id).await.unwrap();
+    let result_felt = result.get(0).unwrap();
+
+    result_felt.to_ascii()
+}
+
+async fn get_symbol(
+    address: FieldElement,
+    block_id: BlockId,
+    rpc: &JsonRpcClient<HttpTransport>,
+) -> String {
+    let request = FunctionCall {
+        contract_address: address,
+        entry_point_selector: SYMBOL_SELECTOR,
+        calldata: vec![],
+    };
+
+    let result = rpc.call(request, &block_id).await.unwrap();
+    let result_felt = result.get(0).unwrap();
+
+    result_felt.to_ascii()
+}
+
+async fn get_token_uri(
+    address: FieldElement,
+    block_id: BlockId,
+    rpc: &JsonRpcClient<HttpTransport>,
+    token_id: FieldElement,
+) -> String {
+    let request = FunctionCall {
+        contract_address: address,
+        entry_point_selector: TOKEN_URI_SELECTOR,
+        calldata: vec![token_id],
     };
 
     let result = rpc.call(request, &block_id).await.unwrap();
