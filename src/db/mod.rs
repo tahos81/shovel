@@ -1,18 +1,20 @@
 pub mod document;
 
 use async_trait::async_trait;
-use mongodb::{options::ClientOptions, Client, Collection, Database};
+use mongodb::{bson::doc, options::ClientOptions, Client, Collection, Database};
+use starknet::core::types::FieldElement;
 use std::env;
 
 use self::document::{Contract, ERC1155, ERC721};
 
 #[async_trait]
 pub trait NftExt {
-    async fn insert_contract(&self, _: Contract) {}
-    async fn insert_erc721(&self, _: ERC721) {}
-    async fn insert_erc1155(&self, _: ERC1155) {}
-    async fn update_erc721(&self, _: ERC721) {}
-    async fn update_erc1155(&self, _: ERC1155) {}
+    async fn insert_contract(&self, contract: Contract);
+    async fn insert_erc721(&self, erc721: ERC721);
+    async fn insert_erc1155(&self, erc1155: ERC1155);
+    async fn update_erc721(&self, erc721: ERC721);
+    async fn update_erc1155(&self, erc1155: ERC1155);
+    async fn contract_exists(&self, contract_address: FieldElement) -> bool;
 }
 
 #[async_trait]
@@ -38,6 +40,15 @@ impl NftExt for Database {
 
     async fn update_erc1155(&self, erc1155: ERC1155) {
         let collection: Collection<ERC1155> = self.collection("erc1155_tokens");
+    }
+
+    async fn contract_exists(&self, contract_address: FieldElement) -> bool {
+        let collection: Collection<Contract> = self.collection("contracts");
+        let result = collection
+            .find_one(doc! {"_id": contract_address.to_string()}, None)
+            .await
+            .unwrap();
+        result.is_some()
     }
 }
 

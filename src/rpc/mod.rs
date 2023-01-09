@@ -1,29 +1,14 @@
 pub mod starknet_constants;
 
+use reqwest::Url;
 use starknet::core::types::FieldElement;
 use starknet::providers::jsonrpc::models::ContractAbiEntry::Function;
 use starknet::providers::jsonrpc::models::{EmittedEvent, EventsPage, FunctionCall};
 use starknet::providers::jsonrpc::{
     models::BlockId, models::EventFilter, HttpTransport, JsonRpcClient,
 };
-
 use starknet_constants::*;
-
-use reqwest::Url;
 use std::{env, str};
-
-trait AsciiExt {
-    fn to_ascii(&self) -> String;
-}
-
-impl AsciiExt for FieldElement {
-    fn to_ascii(&self) -> String {
-        str::from_utf8(&self.to_bytes_be())
-            .unwrap_or_default()
-            .trim_start_matches("\0")
-            .to_string()
-    }
-}
 
 pub async fn setup_rpc() -> JsonRpcClient<HttpTransport> {
     let rpc_url = env::var("STARKNET_MAINNET_RPC").expect("configure your .env file");
@@ -72,7 +57,7 @@ pub async fn get_transfers_between(
 
 pub async fn is_erc721(
     address: FieldElement,
-    block_id: BlockId,
+    block_id: &BlockId,
     rpc: &JsonRpcClient<HttpTransport>,
 ) -> bool {
     let abi = rpc
@@ -95,7 +80,7 @@ pub async fn is_erc721(
 
 pub async fn get_name(
     address: FieldElement,
-    block_id: BlockId,
+    block_id: &BlockId,
     rpc: &JsonRpcClient<HttpTransport>,
 ) -> String {
     let request = FunctionCall {
@@ -112,7 +97,7 @@ pub async fn get_name(
 
 pub async fn get_symbol(
     address: FieldElement,
-    block_id: BlockId,
+    block_id: &BlockId,
     rpc: &JsonRpcClient<HttpTransport>,
 ) -> String {
     let request = FunctionCall {
@@ -129,7 +114,7 @@ pub async fn get_symbol(
 
 pub async fn get_token_uri(
     address: FieldElement,
-    block_id: BlockId,
+    block_id: &BlockId,
     rpc: &JsonRpcClient<HttpTransport>,
     token_id: FieldElement,
 ) -> String {
@@ -143,4 +128,17 @@ pub async fn get_token_uri(
     let result_felt = result.get(0).unwrap_or(&ZERO_ADDRESS);
 
     result_felt.to_ascii()
+}
+
+trait AsciiExt {
+    fn to_ascii(&self) -> String;
+}
+
+impl AsciiExt for FieldElement {
+    fn to_ascii(&self) -> String {
+        str::from_utf8(&self.to_bytes_be())
+            .unwrap_or_default()
+            .trim_start_matches("\0")
+            .to_string()
+    }
 }

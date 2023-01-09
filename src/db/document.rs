@@ -17,8 +17,8 @@ pub struct Erc721ID {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Contract {
     pub _id: FieldElement,
-    pub name: Option<String>,
-    pub symbol: Option<String>,
+    pub name: String,
+    pub symbol: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -36,6 +36,16 @@ pub struct ERC1155 {
     contract: Contract,
     owner: FieldElement,
     uri: String,
+}
+
+impl Contract {
+    pub fn new(contract_address: FieldElement, name: String, symbol: String) -> Self {
+        Self {
+            _id: contract_address,
+            name,
+            symbol,
+        }
+    }
 }
 
 impl ERC721 {

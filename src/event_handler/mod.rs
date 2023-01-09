@@ -1,7 +1,7 @@
-use crate::db::document::ERC721;
+use crate::db::document::*;
 use crate::db::NftExt;
 use crate::rpc::starknet_constants::*;
-use crate::rpc::{self, get_token_uri};
+use crate::rpc::{self, get_name, get_symbol, get_token_uri};
 use mongodb::Database;
 use starknet::providers::jsonrpc::models::{BlockId, EmittedEvent};
 use starknet::providers::jsonrpc::{HttpTransport, JsonRpcClient};
@@ -16,7 +16,7 @@ pub async fn handle_transfer_events(
             //possible ERC721
             let contract_address = transfer_event.from_address;
             let block_id = BlockId::Number(transfer_event.block_number);
-            if rpc::is_erc721(contract_address, block_id, &rpc).await {
+            if rpc::is_erc721(contract_address, &block_id, &rpc).await {
                 handle_erc721_event(transfer_event, rpc, db).await;
             }
         } else {
@@ -49,9 +49,15 @@ async fn handle_erc721_mint(
     let token_id = erc721_event.data[2];
     let contract_address = erc721_event.from_address;
     let block_id = BlockId::Number(erc721_event.block_number);
-    let token_uri = get_token_uri(contract_address, block_id, rpc, token_id).await;
+    let token_uri = get_token_uri(contract_address, &block_id, rpc, token_id).await;
     let new_erc721 = ERC721::new(contract_address, token_id, owner, token_uri);
     db.insert_erc721(new_erc721).await;
+    if !db.contract_exists(contract_address).await {
+        let name = get_name(contract_address, &block_id, rpc).await;
+        let symbol = get_symbol(contract_address, &block_id, rpc).await;
+        let new_contract = Contract::new(contract_address, name, symbol);
+        db.insert_contract(new_contract).await;
+    }
 }
 
 fn handle_erc721_burn(erc721_event: EmittedEvent) {}
