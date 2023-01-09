@@ -1,6 +1,6 @@
 use mongodb::bson::doc;
 use serde::{self, Deserialize, Serialize};
-use starknet::{core::types::FieldElement, providers::jsonrpc::models::EmittedEvent};
+use starknet::core::types::FieldElement;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct AddressAtBlock {
@@ -10,8 +10,8 @@ pub struct AddressAtBlock {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Erc721ID {
-    pub token_id: FieldElement,
     pub contract_address: FieldElement,
+    pub token_id: FieldElement,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -25,7 +25,7 @@ pub struct Contract {
 pub struct ERC721 {
     pub _id: Erc721ID,
     pub owner: FieldElement,
-    pub previous_owners: Option<Vec<AddressAtBlock>>,
+    pub previous_owners: Vec<AddressAtBlock>,
     pub token_uri: String,
 }
 
@@ -38,12 +38,21 @@ pub struct ERC1155 {
     uri: String,
 }
 
-impl From<&EmittedEvent> for Contract {
-    fn from(event: &EmittedEvent) -> Self {
+impl ERC721 {
+    pub fn new(
+        contract_address: FieldElement,
+        token_id: FieldElement,
+        owner: FieldElement,
+        token_uri: String,
+    ) -> Self {
         Self {
-            _id: event.from_address,
-            name: None,
-            symbol: None,
+            _id: Erc721ID {
+                contract_address,
+                token_id,
+            },
+            owner,
+            previous_owners: vec![],
+            token_uri,
         }
     }
 }

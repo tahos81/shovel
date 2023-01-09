@@ -1,8 +1,7 @@
 pub mod document;
 
 use async_trait::async_trait;
-use dotenv::dotenv;
-use mongodb::{bson::doc, options::ClientOptions, Client, Collection, Database};
+use mongodb::{options::ClientOptions, Client, Collection, Database};
 use std::env;
 
 use self::document::{Contract, ERC1155, ERC721};
@@ -43,8 +42,6 @@ impl NftExt for Database {
 }
 
 pub async fn connect() -> Database {
-    dotenv().ok();
-
     let client_url_with_options =
         env::var("CLIENT_URL_WITH_OPTIONS").expect("configure your .env file");
     let client_options = ClientOptions::parse(client_url_with_options).await.unwrap();

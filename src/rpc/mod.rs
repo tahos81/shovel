@@ -19,7 +19,7 @@ trait AsciiExt {
 impl AsciiExt for FieldElement {
     fn to_ascii(&self) -> String {
         str::from_utf8(&self.to_bytes_be())
-            .unwrap()
+            .unwrap_or_default()
             .trim_start_matches("\0")
             .to_string()
     }
@@ -139,8 +139,8 @@ pub async fn get_token_uri(
         calldata: vec![token_id],
     };
 
-    let result = rpc.call(request, &block_id).await.unwrap();
-    let result_felt = result.get(0).unwrap();
+    let result = rpc.call(request, &block_id).await.unwrap_or_default();
+    let result_felt = result.get(0).unwrap_or(&ZERO_ADDRESS);
 
     result_felt.to_ascii()
 }
