@@ -2,15 +2,16 @@ pub mod starknet_constants;
 
 use reqwest::Url;
 use starknet::core::types::FieldElement;
-use starknet::providers::jsonrpc::models::ContractAbiEntry::Function;
-use starknet::providers::jsonrpc::models::{EmittedEvent, EventsPage, FunctionCall};
 use starknet::providers::jsonrpc::{
-    models::BlockId, models::EventFilter, HttpTransport, JsonRpcClient,
+    models::{
+        BlockId, ContractAbiEntry::Function, EmittedEvent, EventFilter, EventsPage, FunctionCall,
+    },
+    HttpTransport, JsonRpcClient,
 };
 use starknet_constants::*;
 use std::{env, str};
 
-pub async fn setup_rpc() -> JsonRpcClient<HttpTransport> {
+pub fn setup_rpc() -> JsonRpcClient<HttpTransport> {
     let rpc_url = env::var("STARKNET_MAINNET_RPC").expect("configure your .env file");
     JsonRpcClient::new(HttpTransport::new(Url::parse(&rpc_url).unwrap()))
 }
@@ -61,7 +62,7 @@ pub async fn is_erc721(
     rpc: &JsonRpcClient<HttpTransport>,
 ) -> bool {
     let abi = rpc
-        .get_class_at(&block_id, address)
+        .get_class_at(block_id, address)
         .await
         .unwrap()
         .abi
@@ -89,7 +90,7 @@ pub async fn get_name(
         calldata: vec![],
     };
 
-    let result = rpc.call(request, &block_id).await.unwrap_or_default();
+    let result = rpc.call(request, block_id).await.unwrap_or_default();
     let result_felt = result.get(0).unwrap_or(&ZERO_FELT);
 
     result_felt.to_ascii()
@@ -106,7 +107,7 @@ pub async fn get_symbol(
         calldata: vec![],
     };
 
-    let result = rpc.call(request, &block_id).await.unwrap_or_default();
+    let result = rpc.call(request, block_id).await.unwrap_or_default();
     let result_felt = result.get(0).unwrap_or(&ZERO_FELT);
 
     result_felt.to_ascii()
@@ -124,7 +125,7 @@ pub async fn get_token_uri(
         calldata: vec![token_id],
     };
 
-    let result = rpc.call(request, &block_id).await.unwrap_or_default();
+    let result = rpc.call(request, block_id).await.unwrap_or_default();
     let result_felt = result.get(0).unwrap_or(&ZERO_FELT);
 
     result_felt.to_ascii()
@@ -138,7 +139,7 @@ impl AsciiExt for FieldElement {
     fn to_ascii(&self) -> String {
         str::from_utf8(&self.to_bytes_be())
             .unwrap_or_default()
-            .trim_start_matches("\0")
+            .trim_start_matches('\0')
             .to_string()
     }
 }

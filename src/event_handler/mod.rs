@@ -1,11 +1,14 @@
-use crate::db::document::*;
-use crate::db::NftExt;
-use crate::rpc::starknet_constants::*;
-use crate::rpc::{self, get_name, get_symbol, get_token_uri};
+use crate::db::{
+    document::{Contract, ERC721},
+    NftExt,
+};
+use crate::rpc::{self, get_name, get_symbol, get_token_uri, starknet_constants::*};
 use mongodb::Database;
 use starknet::core::types::FieldElement;
-use starknet::providers::jsonrpc::models::{BlockId, EmittedEvent};
-use starknet::providers::jsonrpc::{HttpTransport, JsonRpcClient};
+use starknet::providers::jsonrpc::{
+    models::{BlockId, EmittedEvent},
+    HttpTransport, JsonRpcClient,
+};
 
 use std::collections::HashSet;
 
@@ -20,8 +23,9 @@ pub async fn handle_transfer_events(
             //possible ERC721
             let contract_address = transfer_event.from_address;
             let block_id = BlockId::Number(transfer_event.block_number);
+            //probably should hardcode ether address
             if !blacklist.contains(&contract_address)
-                && rpc::is_erc721(contract_address, &block_id, &rpc).await
+                && rpc::is_erc721(contract_address, &block_id, rpc).await
             {
                 handle_erc721_event(transfer_event, rpc, db).await;
             } else {
@@ -84,6 +88,9 @@ async fn handle_erc721_transfer(erc721_event: EmittedEvent, db: &Database) {
     .await;
 }
 
-fn handle_erc721_burn(erc721_event: EmittedEvent) {}
-
-fn handle_erc1155_event(erc1155_event: EmittedEvent) {}
+fn handle_erc721_burn(erc721_event: EmittedEvent) {
+    drop(erc721_event);
+}
+fn handle_erc1155_event(erc1155_event: EmittedEvent) {
+    drop(erc1155_event);
+}

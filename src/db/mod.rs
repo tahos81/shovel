@@ -76,6 +76,8 @@ impl NftExt for Database {
 
     async fn update_erc1155(&self, erc1155: ERC1155) {
         let collection: Collection<ERC1155> = self.collection("erc1155_tokens");
+        drop(erc1155);
+        drop(collection);
     }
 
     async fn contract_exists(&self, contract_address: FieldElement) -> bool {
