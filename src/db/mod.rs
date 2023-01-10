@@ -83,6 +83,7 @@ impl NftExt for Database {
     async fn contract_exists(&self, contract_address: FieldElement) -> bool {
         let collection: Collection<Contract> = self.collection("contracts");
         let query = doc! {"_id": contract_address.to_string()};
+        //TODO: use find instead of find_one
         let result = collection.find_one(query, None).await.unwrap();
         result.is_some()
     }
