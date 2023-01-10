@@ -21,11 +21,8 @@ pub async fn get_transfers_between(
     range: u64,
     rpc: &JsonRpcClient<HttpTransport>,
 ) -> Vec<EmittedEvent> {
-    let keys: Vec<FieldElement> = Vec::from([
-        TRANSFER_EVENT_KEY,
-        TRANSFER_SINGLE_EVENT_KEY,
-        TRANSFER_BATCH_EVENT_KEY,
-    ]);
+    let keys: Vec<FieldElement> =
+        Vec::from([TRANSFER_EVENT_KEY, TRANSFER_SINGLE_EVENT_KEY, TRANSFER_BATCH_EVENT_KEY]);
 
     let transfer_filter: EventFilter = EventFilter {
         from_block: Some(BlockId::Number(start_block)),
@@ -41,10 +38,8 @@ pub async fn get_transfers_between(
     let mut events: Vec<EmittedEvent> = Vec::new();
 
     loop {
-        events_resp = rpc
-            .get_events(transfer_filter.clone(), continuation_token, chunk_size)
-            .await
-            .unwrap();
+        events_resp =
+            rpc.get_events(transfer_filter.clone(), continuation_token, chunk_size).await.unwrap();
 
         events.append(&mut events_resp.events);
 
@@ -61,12 +56,7 @@ pub async fn is_erc721(
     block_id: &BlockId,
     rpc: &JsonRpcClient<HttpTransport>,
 ) -> bool {
-    let abi = rpc
-        .get_class_at(block_id, address)
-        .await
-        .unwrap()
-        .abi
-        .unwrap();
+    let abi = rpc.get_class_at(block_id, address).await.unwrap().abi.unwrap();
 
     for abi_entry in abi {
         if let Function(function_abi_entry) = abi_entry {
@@ -137,9 +127,6 @@ trait AsciiExt {
 
 impl AsciiExt for FieldElement {
     fn to_ascii(&self) -> String {
-        str::from_utf8(&self.to_bytes_be())
-            .unwrap_or_default()
-            .trim_start_matches('\0')
-            .to_string()
+        str::from_utf8(&self.to_bytes_be()).unwrap_or_default().trim_start_matches('\0').to_string()
     }
 }

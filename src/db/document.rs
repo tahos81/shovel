@@ -40,11 +40,7 @@ pub struct ERC1155 {
 
 impl Contract {
     pub fn new(contract_address: FieldElement, name: String, symbol: String) -> Self {
-        Self {
-            _id: contract_address,
-            name,
-            symbol,
-        }
+        Self { _id: contract_address, name, symbol }
     }
 }
 
@@ -56,10 +52,7 @@ impl ERC721 {
         token_uri: String,
     ) -> Self {
         Self {
-            _id: Erc721ID {
-                contract_address,
-                token_id,
-            },
+            _id: Erc721ID { contract_address, token_id },
             owner,
             previous_owners: vec![],
             token_uri,

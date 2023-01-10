@@ -4,13 +4,13 @@
 
 -   [x] Parse ABI
 -   [x] Match between ERC20 and ERC721
--   [ ] Database integration
+-   [x] Database integration
     -   [x] Connect to database
     -   [x] Create collections
-    -   [ ] Create structs for collection types
-    -   [ ] Store contract information
-    -   [ ] Store mock token information (as we'll get metadata later)
--   [ ] Save contract to database
+    -   [x] Create structs for collection types
+    -   [x] Store contract information
+    -   [x] Store mock token information (as we'll get metadata later)
+-   [x] Save contract to database
 -   [ ] Get contract metadata
 -   [ ] Save token balance to database
 -   [ ] Get token metadata

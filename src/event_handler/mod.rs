@@ -78,14 +78,7 @@ async fn handle_erc721_transfer(erc721_event: EmittedEvent, db: &Database) {
     let token_id = erc721_event.data[2];
     let contract_address = erc721_event.from_address;
     let block_number = erc721_event.block_number;
-    db.update_erc721_owner(
-        contract_address,
-        token_id,
-        old_owner,
-        new_owner,
-        block_number,
-    )
-    .await;
+    db.update_erc721_owner(contract_address, token_id, old_owner, new_owner, block_number).await;
 }
 
 fn handle_erc721_burn(erc721_event: EmittedEvent) {
