@@ -3,21 +3,29 @@ use crate::db::NftExt;
 use crate::rpc::starknet_constants::*;
 use crate::rpc::{self, get_name, get_symbol, get_token_uri};
 use mongodb::Database;
+use starknet::core::types::FieldElement;
 use starknet::providers::jsonrpc::models::{BlockId, EmittedEvent};
 use starknet::providers::jsonrpc::{HttpTransport, JsonRpcClient};
+
+use std::collections::HashSet;
 
 pub async fn handle_transfer_events(
     transfer_events: Vec<EmittedEvent>,
     rpc: &JsonRpcClient<HttpTransport>,
     db: &Database,
 ) {
+    let mut blacklist: HashSet<FieldElement> = HashSet::new();
     for transfer_event in transfer_events {
         if transfer_event.keys.contains(&TRANSFER_EVENT_KEY) {
             //possible ERC721
             let contract_address = transfer_event.from_address;
             let block_id = BlockId::Number(transfer_event.block_number);
-            if rpc::is_erc721(contract_address, &block_id, &rpc).await {
+            if !blacklist.contains(&contract_address)
+                && rpc::is_erc721(contract_address, &block_id, &rpc).await
+            {
                 handle_erc721_event(transfer_event, rpc, db).await;
+            } else {
+                blacklist.insert(contract_address);
             }
         } else {
             //definitely ERC1155

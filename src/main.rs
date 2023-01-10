@@ -12,6 +12,6 @@ async fn main() {
 
     let db = db::connect().await;
     let rpc = rpc::setup_rpc().await;
-    let transfer_events = rpc::get_transfers_between(15437, 1, &rpc).await;
+    let transfer_events = rpc::get_transfers_between(18545, 5, &rpc).await;
     event_handler::handle_transfer_events(transfer_events, &rpc, &db).await;
 }
