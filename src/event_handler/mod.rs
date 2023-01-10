@@ -31,12 +31,12 @@ async fn handle_erc721_event(
     rpc: &JsonRpcClient<HttpTransport>,
     db: &Database,
 ) {
-    if erc721_event.data[0] == ZERO_ADDRESS {
+    if erc721_event.data[0] == ZERO_FELT {
         handle_erc721_mint(erc721_event, rpc, db).await;
-    } else if erc721_event.data[1] == ZERO_ADDRESS {
+    } else if erc721_event.data[1] == ZERO_FELT {
         handle_erc721_burn(erc721_event);
     } else {
-        handle_erc721_transfer(erc721_event);
+        handle_erc721_transfer(erc721_event, db).await;
     }
 }
 
@@ -60,8 +60,22 @@ async fn handle_erc721_mint(
     }
 }
 
-fn handle_erc721_burn(erc721_event: EmittedEvent) {}
+async fn handle_erc721_transfer(erc721_event: EmittedEvent, db: &Database) {
+    let old_owner = erc721_event.data[0];
+    let new_owner = erc721_event.data[1];
+    let token_id = erc721_event.data[2];
+    let contract_address = erc721_event.from_address;
+    let block_number = erc721_event.block_number;
+    db.update_erc721_owner(
+        contract_address,
+        token_id,
+        old_owner,
+        new_owner,
+        block_number,
+    )
+    .await;
+}
 
-fn handle_erc721_transfer(erc721_event: EmittedEvent) {}
+fn handle_erc721_burn(erc721_event: EmittedEvent) {}
 
 fn handle_erc1155_event(erc1155_event: EmittedEvent) {}

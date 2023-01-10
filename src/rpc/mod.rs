@@ -89,8 +89,8 @@ pub async fn get_name(
         calldata: vec![],
     };
 
-    let result = rpc.call(request, &block_id).await.unwrap();
-    let result_felt = result.get(0).unwrap();
+    let result = rpc.call(request, &block_id).await.unwrap_or_default();
+    let result_felt = result.get(0).unwrap_or(&ZERO_FELT);
 
     result_felt.to_ascii()
 }
@@ -106,8 +106,8 @@ pub async fn get_symbol(
         calldata: vec![],
     };
 
-    let result = rpc.call(request, &block_id).await.unwrap();
-    let result_felt = result.get(0).unwrap();
+    let result = rpc.call(request, &block_id).await.unwrap_or_default();
+    let result_felt = result.get(0).unwrap_or(&ZERO_FELT);
 
     result_felt.to_ascii()
 }
@@ -125,7 +125,7 @@ pub async fn get_token_uri(
     };
 
     let result = rpc.call(request, &block_id).await.unwrap_or_default();
-    let result_felt = result.get(0).unwrap_or(&ZERO_ADDRESS);
+    let result_felt = result.get(0).unwrap_or(&ZERO_FELT);
 
     result_felt.to_ascii()
 }

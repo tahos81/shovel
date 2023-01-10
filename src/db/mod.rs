@@ -1,18 +1,26 @@
 pub mod document;
 
+use self::document::{Contract, ERC1155, ERC721};
 use async_trait::async_trait;
-use mongodb::{bson::doc, options::ClientOptions, Client, Collection, Database};
+use mongodb::{
+    bson::doc, options::ClientOptions, options::UpdateOptions, Client, Collection, Database,
+};
 use starknet::core::types::FieldElement;
 use std::env;
-
-use self::document::{Contract, ERC1155, ERC721};
 
 #[async_trait]
 pub trait NftExt {
     async fn insert_contract(&self, contract: Contract);
     async fn insert_erc721(&self, erc721: ERC721);
     async fn insert_erc1155(&self, erc1155: ERC1155);
-    async fn update_erc721(&self, erc721: ERC721);
+    async fn update_erc721_owner(
+        &self,
+        contract_address: FieldElement,
+        token_id: FieldElement,
+        old_owner: FieldElement,
+        new_owner: FieldElement,
+        block_number: u64,
+    );
     async fn update_erc1155(&self, erc1155: ERC1155);
     async fn contract_exists(&self, contract_address: FieldElement) -> bool;
 }
@@ -34,8 +42,36 @@ impl NftExt for Database {
         collection.insert_one(erc1155, None).await.unwrap();
     }
 
-    async fn update_erc721(&self, erc721: ERC721) {
+    async fn update_erc721_owner(
+        &self,
+        contract_address: FieldElement,
+        token_id: FieldElement,
+        old_owner: FieldElement,
+        new_owner: FieldElement,
+        block_number: u64,
+    ) {
         let collection: Collection<ERC721> = self.collection("erc721_tokens");
+
+        let query = doc! {"_id": {
+            "contract_address": contract_address.to_string(),
+            "token_id": token_id.to_string()
+        }};
+
+        let update = doc! {
+            "$set": {
+            "owner": new_owner.to_string()
+            },
+            "$push": {
+                "previous_owners": {
+                    "address": old_owner.to_string(),
+                    "block": block_number as i64
+                }
+            }
+        };
+
+        let options = UpdateOptions::builder().upsert(true).build();
+
+        collection.update_one(query, update, options).await.unwrap();
     }
 
     async fn update_erc1155(&self, erc1155: ERC1155) {
@@ -44,10 +80,8 @@ impl NftExt for Database {
 
     async fn contract_exists(&self, contract_address: FieldElement) -> bool {
         let collection: Collection<Contract> = self.collection("contracts");
-        let result = collection
-            .find_one(doc! {"_id": contract_address.to_string()}, None)
-            .await
-            .unwrap();
+        let query = doc! {"_id": contract_address.to_string()};
+        let result = collection.find_one(query, None).await.unwrap();
         result.is_some()
     }
 }

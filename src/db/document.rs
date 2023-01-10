@@ -4,8 +4,8 @@ use starknet::core::types::FieldElement;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct AddressAtBlock {
-    address: FieldElement,
-    block: u64,
+    pub address: FieldElement,
+    pub block: u64,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
