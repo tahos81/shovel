@@ -28,7 +28,7 @@ pub struct ERC721 {
     pub _id: Erc721ID,
     pub owner: FieldElement,
     pub previous_owners: Vec<AddressAtBlock>,
-    pub token_uri: String,
+    pub token_uri: Option<String>
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -51,7 +51,7 @@ impl ERC721 {
         contract_address: FieldElement,
         token_id: CairoUint256,
         owner: FieldElement,
-        token_uri: String,
+        token_uri: Option<String>
     ) -> Self {
         Self {
             _id: Erc721ID { contract_address, token_id },
