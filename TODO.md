@@ -2,7 +2,7 @@
 
 ---
 
--   [ ] Handle burns
+-   [X] Handle burns
 -   [ ] Parse token metadata from tokenURI
 -   [ ] Handle ERC1155 tokens
 -   [ ] Graceful error handling

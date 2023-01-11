@@ -50,7 +50,8 @@ async fn handle_erc721_event(
     if erc721_event.data[0] == ZERO_FELT {
         handle_erc721_mint(erc721_event, rpc, db).await;
     } else if erc721_event.data[1] == ZERO_FELT {
-        handle_erc721_burn(erc721_event);
+        // In order to show transfer data of burned NFTs we treat them like a transfer
+        handle_erc721_transfer(erc721_event, db).await;
     } else {
         handle_erc721_transfer(erc721_event, db).await;
     }
@@ -90,9 +91,6 @@ async fn handle_erc721_transfer(erc721_event: EmittedEvent, db: &Database) {
     db.update_erc721_owner(contract_address, token_id, old_owner, new_owner, block_number).await;
 }
 
-fn handle_erc721_burn(erc721_event: EmittedEvent) {
-    drop(erc721_event);
-}
 fn handle_erc1155_event(erc1155_event: EmittedEvent) {
     drop(erc1155_event);
 }
