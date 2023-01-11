@@ -122,17 +122,36 @@ pub async fn get_token_uri(
         calldata: vec![token_id.low, token_id.high],
     };
 
-    let result = match rpc.call(request, block_id).await {
-        Ok(felt_array) => {
-            dbg!(&felt_array);
-            felt_array
-        }
+    let token_uri_response = match rpc.call(request, block_id).await {
+        Ok(felt_array) => felt_array,
         Err(e) => {
             dbg!(e);
-            vec![]
+            return String::new();
         }
     };
-    let result_felt = result.get(0).unwrap_or(&ZERO_FELT);
 
-    result_felt.to_ascii()
+    // If tokenURI function is EIP721Metadata compliant, it should return one felt
+    // Otherwise we also consider the case where contracts returns a felt array
+    let is_felt_array = token_uri_response.len() > 1;
+
+    if is_felt_array {
+        // Create a vector of bytes from the felt array, and for each felt in the array, filter out
+        // the 0's and append to the vector
+        let mut chars: Vec<u8> = vec![];
+        for felt in token_uri_response.iter().skip(1) {
+            let temp = felt.to_bytes_be();
+            for &v in temp.iter() {
+                print!("{} ", v);
+                if v != 0 {
+                    chars.push(v);
+                }
+            }
+        }
+
+        // Convert the array to UTF8 string
+        String::from_utf8(chars).unwrap_or_default()
+    } else {
+        // Convert the array to ASCII
+        token_uri_response.get(0).unwrap_or(&ZERO_FELT).to_ascii()
+    }
 }
