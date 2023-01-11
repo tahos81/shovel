@@ -11,6 +11,7 @@
 -   [ ] Add the missing fields in our data model
 -   [ ] Iterate whole chain
 -   [ ] Start listening for new events
+-   [ ] Write tests
 -   [ ] Go concurrent
 -   [ ] Cache contracts on high demand
 -   [ ] Document EVERYTHING
