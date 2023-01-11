@@ -3,6 +3,7 @@ pub mod starknet_constants;
 use crate::common::traits::AsciiExt;
 use reqwest::Url;
 use starknet::core::types::FieldElement;
+use starknet::macros::selector;
 use starknet::providers::jsonrpc::{
     models::{
         BlockId, ContractAbiEntry::Function, EmittedEvent, EventFilter, EventsPage, FunctionCall,
@@ -10,7 +11,7 @@ use starknet::providers::jsonrpc::{
     HttpTransport, JsonRpcClient,
 };
 use starknet_constants::*;
-use std::{env, str};
+use std::env;
 
 use crate::common::cairo_types::CairoUint256;
 
@@ -117,11 +118,20 @@ pub async fn get_token_uri(
     // uint256 -> [ felt, felt ]
     let request = FunctionCall {
         contract_address: address,
-        entry_point_selector: TOKEN_URI_SELECTOR,
+        entry_point_selector: selector!("tokenURI"),
         calldata: vec![token_id.low, token_id.high],
     };
 
-    let result = rpc.call(request, block_id).await.unwrap_or_default();
+    let result = match rpc.call(request, block_id).await {
+        Ok(felt_array) => {
+            dbg!(&felt_array);
+            felt_array
+        }
+        Err(e) => {
+            dbg!(e);
+            vec![]
+        }
+    };
     let result_felt = result.get(0).unwrap_or(&ZERO_FELT);
 
     result_felt.to_ascii()
