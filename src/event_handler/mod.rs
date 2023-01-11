@@ -67,7 +67,6 @@ async fn handle_erc721_mint(
     let contract_address = erc721_event.from_address;
     let block_id = BlockId::Number(erc721_event.block_number);
 
-    let token_uri = rpc::get_token_uri(contract_address, &block_id, rpc, token_id).await;
     let new_erc721 = ERC721::new(contract_address, token_id, owner, None);
     db.insert_erc721(new_erc721).await;
 

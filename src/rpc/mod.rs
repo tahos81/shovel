@@ -139,7 +139,6 @@ pub async fn get_token_uri(
         for felt in token_uri_response.iter().skip(1) {
             let temp = felt.to_bytes_be();
             for &v in temp.iter() {
-                print!("{} ", v);
                 if v != 0 {
                     chars.push(v);
                 }
