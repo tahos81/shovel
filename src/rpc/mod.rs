@@ -120,11 +120,8 @@ pub async fn get_token_uri(
         calldata: vec![token_id.low, token_id.high],
     };
 
-    let result = match rpc.call(request, block_id).await {
-        Ok(felt_array) => {
-            dbg!(&felt_array);
-            felt_array
-        }
+    let token_uri_response = match rpc.call(request, block_id).await {
+        Ok(felt_array) => felt_array,
         Err(e) => {
             dbg!(e);
             return String::new();
