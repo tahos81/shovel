@@ -1,5 +1,6 @@
 pub mod starknet_constants;
 
+use crate::common::traits::AsciiExt;
 use reqwest::Url;
 use starknet::core::types::FieldElement;
 use starknet::providers::jsonrpc::{
@@ -10,6 +11,8 @@ use starknet::providers::jsonrpc::{
 };
 use starknet_constants::*;
 use std::{env, str};
+
+use crate::common::cairo_types::CairoUint256;
 
 pub fn setup_rpc() -> JsonRpcClient<HttpTransport> {
     let rpc_url = env::var("STARKNET_MAINNET_RPC").expect("configure your .env file");
@@ -103,30 +106,23 @@ pub async fn get_symbol(
     result_felt.to_ascii()
 }
 
+/// Gets the token URI for a given token ID
 pub async fn get_token_uri(
     address: FieldElement,
     block_id: &BlockId,
     rpc: &JsonRpcClient<HttpTransport>,
-    token_id: FieldElement,
+    token_id: CairoUint256,
 ) -> String {
+    // token_uri(uint256) | tokenURI(uint256)
+    // uint256 -> [ felt, felt ]
     let request = FunctionCall {
         contract_address: address,
         entry_point_selector: TOKEN_URI_SELECTOR,
-        calldata: vec![token_id],
+        calldata: vec![token_id.low, token_id.high],
     };
 
     let result = rpc.call(request, block_id).await.unwrap_or_default();
     let result_felt = result.get(0).unwrap_or(&ZERO_FELT);
 
     result_felt.to_ascii()
-}
-
-trait AsciiExt {
-    fn to_ascii(&self) -> String;
-}
-
-impl AsciiExt for FieldElement {
-    fn to_ascii(&self) -> String {
-        str::from_utf8(&self.to_bytes_be()).unwrap_or_default().trim_start_matches('\0').to_string()
-    }
 }

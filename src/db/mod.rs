@@ -1,5 +1,7 @@
 pub mod document;
 
+use crate::common::cairo_types::CairoUint256;
+
 use self::document::{Contract, ERC1155, ERC721};
 use async_trait::async_trait;
 use mongodb::{
@@ -16,7 +18,7 @@ pub trait NftExt {
     async fn update_erc721_owner(
         &self,
         contract_address: FieldElement,
-        token_id: FieldElement,
+        token_id: CairoUint256,
         old_owner: FieldElement,
         new_owner: FieldElement,
         block_number: u64,
@@ -45,7 +47,7 @@ impl NftExt for Database {
     async fn update_erc721_owner(
         &self,
         contract_address: FieldElement,
-        token_id: FieldElement,
+        token_id: CairoUint256,
         old_owner: FieldElement,
         new_owner: FieldElement,
         block_number: u64,
@@ -54,7 +56,10 @@ impl NftExt for Database {
 
         let query = doc! {"_id": {
             "contract_address": contract_address.to_string(),
-            "token_id": token_id.to_string()
+            "token_id": {
+                "low": token_id.low.to_string(),
+                "high": token_id.high.to_string()
+            }
         }};
 
         let update = doc! {

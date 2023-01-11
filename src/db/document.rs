@@ -2,6 +2,8 @@ use mongodb::bson::doc;
 use serde::{self, Deserialize, Serialize};
 use starknet::core::types::FieldElement;
 
+use crate::common::cairo_types::CairoUint256;
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct AddressAtBlock {
     pub address: FieldElement,
@@ -11,7 +13,7 @@ pub struct AddressAtBlock {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Erc721ID {
     pub contract_address: FieldElement,
-    pub token_id: FieldElement,
+    pub token_id: CairoUint256,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -47,7 +49,7 @@ impl Contract {
 impl ERC721 {
     pub fn new(
         contract_address: FieldElement,
-        token_id: FieldElement,
+        token_id: CairoUint256,
         owner: FieldElement,
         token_uri: String,
     ) -> Self {
