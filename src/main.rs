@@ -1,5 +1,6 @@
 #![warn(clippy::all, clippy::pedantic, clippy::style)]
 #![allow(clippy::unreadable_literal)]
+mod common;
 mod db;
 mod event_handler;
 mod rpc;
