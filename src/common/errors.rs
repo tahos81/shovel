@@ -1,0 +1,1 @@
+// Custom errors used through the projects
