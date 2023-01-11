@@ -1,4 +1,5 @@
-use crate::rpc::{self, starknet_constants::*};
+use crate::common::starknet_constants::*;
+use crate::rpc;
 use crate::{
     common::cairo_types::CairoUint256,
     db::{

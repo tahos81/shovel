@@ -1,5 +1,4 @@
-pub mod starknet_constants;
-
+use crate::common::starknet_constants::*;
 use crate::common::traits::AsciiExt;
 use reqwest::Url;
 use starknet::core::types::FieldElement;
@@ -10,7 +9,6 @@ use starknet::providers::jsonrpc::{
     },
     HttpTransport, JsonRpcClient,
 };
-use starknet_constants::*;
 use std::env;
 
 use crate::common::cairo_types::CairoUint256;
@@ -122,8 +120,11 @@ pub async fn get_token_uri(
         calldata: vec![token_id.low, token_id.high],
     };
 
-    let token_uri_response = match rpc.call(request, block_id).await {
-        Ok(felt_array) => felt_array,
+    let result = match rpc.call(request, block_id).await {
+        Ok(felt_array) => {
+            dbg!(&felt_array);
+            felt_array
+        }
         Err(e) => {
             dbg!(e);
             return String::new();
