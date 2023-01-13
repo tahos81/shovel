@@ -3,10 +3,10 @@
 ---
 
 -   [x] Handle burns
--   [ ] Parse token metadata from tokenURI
 -   [x] Handle ERC1155 tokens
 -   [x] Graceful error handling
 -   [x] Handle proxies
+-   [ ] Parse token metadata from tokenURI
 -   [ ] Add the missing fields in our data model
 -   [ ] Iterate whole chain
 -   [ ] Start listening for new events

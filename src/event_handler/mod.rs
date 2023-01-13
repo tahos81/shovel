@@ -33,15 +33,15 @@ pub async fn handle_transfer_events(
             if !blacklist.contains(&contract_address)
                 && rpc::is_erc721(contract_address, &block_id, rpc).await?
             {
-                handle_erc721_event(transfer_event, rpc, db).await?
+                handle_erc721_event(transfer_event, rpc, db).await?;
             } else {
                 println!("Blacklisting contract");
                 blacklist.insert(contract_address);
             }
         } else if transfer_event.keys.contains(&TRANSFER_SINGLE_EVENT_KEY) {
-            handle_erc1155_transfer_single(transfer_event, db).await?
+            handle_erc1155_transfer_single(transfer_event, db).await?;
         } else if transfer_event.keys.contains(&TRANSFER_BATCH_EVENT_KEY) {
-            handle_erc1155_transfer_batch(transfer_event, db).await?
+            handle_erc1155_transfer_batch(transfer_event, db).await?;
         }
     }
     Ok(())
@@ -115,7 +115,7 @@ async fn erc1155_single_transfer(
             };
 
         let new_balance = from_balance - amount;
-        db.update_erc1155_balance(contract_address, token_id, from_address, new_balance).await?
+        db.update_erc1155_balance(contract_address, token_id, from_address, new_balance).await?;
     }
 
     // Update to balance

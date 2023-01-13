@@ -143,7 +143,7 @@ pub async fn _get_token_uri(
         let mut chars: Vec<u8> = vec![];
         for felt in token_uri_response.iter().skip(1) {
             let temp = felt.to_bytes_be();
-            for &v in temp.iter() {
+            for &v in &temp {
                 if v != 0 {
                     chars.push(v);
                 }

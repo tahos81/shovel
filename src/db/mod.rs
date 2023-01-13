@@ -60,7 +60,7 @@ impl NftExt for Database {
                 None,
             )
             .await?
-            .and_then(|response| Some(response.balance));
+            .map(|response| response.balance);
         Ok(balance)
     }
 

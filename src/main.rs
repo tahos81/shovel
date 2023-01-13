@@ -19,6 +19,7 @@ async fn main() -> Result<()> {
     let range = 1;
     //loop
     while start_block < 16000 {
+        //tokio::spawn(async move || handle_transfers);
         println!("start block: {}", start_block);
         let transfer_events = rpc::get_transfers_between(start_block, range, &rpc).await?;
         println!("got {} events", transfer_events.len());

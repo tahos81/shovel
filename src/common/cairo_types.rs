@@ -31,16 +31,12 @@ impl PartialEq for CairoUint256 {
     fn eq(&self, other: &Self) -> bool {
         self.low == other.low && self.high == other.high
     }
-
-    fn ne(&self, other: &Self) -> bool {
-        self.low != other.low || self.high != other.high
-    }
 }
 
 impl Add for CairoUint256 {
     type Output = Self;
 
-    /// Returns the sum of the two CairoUint256s.
+    /// Returns the sum of the two `CairoUint256`s.
     fn add(self, other: Self) -> Self {
         let sum_low = self.low + other.low;
 
@@ -62,7 +58,7 @@ impl Add for CairoUint256 {
 impl Neg for CairoUint256 {
     type Output = Self;
 
-    /// Returns the two's complement of the CairoUint256.
+    /// Returns the two's complement of the `CairoUint256`.
     fn neg(self) -> Self {
         let u256_not = self.not();
         u256_not + Self::new(FieldElement::ONE, FieldElement::ZERO)
@@ -78,22 +74,16 @@ impl Sub for CairoUint256 {
 }
 
 impl CairoUint256 {
-    pub const ZERO: Self = CairoUint256 {
-        low: FieldElement::ZERO,
-        high: FieldElement::ZERO,
-    };
+    pub const ZERO: Self = CairoUint256 { low: FieldElement::ZERO, high: FieldElement::ZERO };
 
-    pub const ONE: Self = CairoUint256 {
-        low: FieldElement::ONE,
-        high: FieldElement::ZERO,
-    };
+    pub const ONE: Self = CairoUint256 { low: FieldElement::ONE, high: FieldElement::ZERO };
 
-    /// Creates a new CairoUint256 from the given low and high FieldElements.
+    /// Creates a new CairoUint256 from the given low and high `FieldElement`s.
     pub fn new(low: FieldElement, high: FieldElement) -> Self {
         CairoUint256 { low, high }
     }
 
-    /// Returns the bitwise NOT of the CairoUint256.
+    /// Returns the bitwise NOT of the `CairoUint256`.
     /// This is equivalent to `felt!(2**256 - 1) - self`.
     pub fn not(self) -> Self {
         Self::new(CAIRO_UINT128_ALL_ONES - self.low, CAIRO_UINT128_ALL_ONES - self.high)
