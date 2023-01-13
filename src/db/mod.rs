@@ -47,19 +47,19 @@ impl NftExt for Database {
         token_id: CairoUint256,
         address: FieldElement,
     ) -> Option<CairoUint256> {
-        let collection: Collection<ERC1155Balance> = self.collection("erc115_token_balances");
-        let query = doc! {
-            "_id": {
-                "contract_address": contract_address.to_string(),
-                "token_id": {
-                    "low": token_id.low.to_string(),
-                    "high": token_id.high.to_string()
+        self.collection::<ERC1155Balance>("erc1155_token_balances")
+            .find_one(
+                doc! {
+                    "_id.contract_address": contract_address.to_string(),
+                    "_id.token_id.low": token_id.low.to_string(),
+                    "_id.token_id.high": token_id.high.to_string(),
+                    "_id.owner": address.to_string(),
                 },
-                "address": address.to_string(),
-            }
-        };
-
-        collection.find_one(query, None).await.unwrap().and_then(|response| Some(response.balance))
+                None,
+            )
+            .await
+            .unwrap()
+            .and_then(|response| Some(response.balance))
     }
 
     async fn insert_contract(&self, contract: Contract) {
