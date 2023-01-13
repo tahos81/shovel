@@ -1,3 +1,4 @@
+use crate::common::errors::RpcError;
 use crate::common::starknet_constants::*;
 use crate::common::traits::AsciiExt;
 use reqwest::Url;
@@ -13,9 +14,10 @@ use std::env;
 
 use crate::common::cairo_types::CairoUint256;
 
-pub fn setup_rpc() -> JsonRpcClient<HttpTransport> {
-    let rpc_url = env::var("STARKNET_MAINNET_RPC").expect("configure your .env file");
-    JsonRpcClient::new(HttpTransport::new(Url::parse(&rpc_url).unwrap()))
+pub fn setup_rpc() -> Result<JsonRpcClient<HttpTransport>, RpcError> {
+    let rpc_url = env::var("STARKNET_MAINNET_RPC")?;
+    let parsed_url = Url::parse(&rpc_url)?;
+    Ok(JsonRpcClient::new(HttpTransport::new(parsed_url)))
 }
 
 pub async fn get_transfers_between(
