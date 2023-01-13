@@ -4,9 +4,14 @@ use thiserror::Error;
 use url::ParseError;
 
 #[derive(Debug, Error)]
-pub enum RpcError {
+pub enum ConfigError {
     #[error("Configure .env file")]
     MissingField(#[from] VarError),
     #[error("Invalid rpc url")]
-    InvalidUrl(#[from] ParseError),
+    InvalidRpcUrl(#[from] ParseError),
+    #[error("Something is wrong with your connection string")]
+    InvalidConnectionString(#[from] mongodb::error::Error),
 }
+
+#[derive(Debug, Error)]
+pub enum RpcError {}

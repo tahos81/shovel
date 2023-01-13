@@ -1,6 +1,7 @@
-use crate::common::errors::RpcError;
+use crate::common::errors::ConfigError;
 use crate::common::starknet_constants::*;
 use crate::common::traits::AsciiExt;
+use eyre::Result;
 use reqwest::Url;
 use starknet::core::types::FieldElement;
 use starknet::macros::selector;
@@ -14,7 +15,7 @@ use std::env;
 
 use crate::common::cairo_types::CairoUint256;
 
-pub fn setup_rpc() -> Result<JsonRpcClient<HttpTransport>, RpcError> {
+pub fn setup_rpc() -> Result<JsonRpcClient<HttpTransport>, ConfigError> {
     let rpc_url = env::var("STARKNET_MAINNET_RPC")?;
     let parsed_url = Url::parse(&rpc_url)?;
     Ok(JsonRpcClient::new(HttpTransport::new(parsed_url)))
@@ -24,7 +25,7 @@ pub async fn get_transfers_between(
     start_block: u64,
     range: u64,
     rpc: &JsonRpcClient<HttpTransport>,
-) -> Vec<EmittedEvent> {
+) -> Result<Vec<EmittedEvent>> {
     let keys: Vec<FieldElement> =
         Vec::from([TRANSFER_EVENT_KEY, TRANSFER_SINGLE_EVENT_KEY, TRANSFER_BATCH_EVENT_KEY]);
 
@@ -38,19 +39,18 @@ pub async fn get_transfers_between(
     let mut continuation_token: Option<String> = None;
     let chunk_size: u64 = 1024;
 
-    let mut events_resp: EventsPage;
+    let mut get_events_resp: EventsPage;
     let mut events: Vec<EmittedEvent> = Vec::new();
 
     loop {
-        events_resp =
-            rpc.get_events(transfer_filter.clone(), continuation_token, chunk_size).await.unwrap();
+        get_events_resp =
+            rpc.get_events(transfer_filter.clone(), continuation_token, chunk_size).await?;
 
-        events.append(&mut events_resp.events);
-
-        continuation_token = events_resp.continuation_token;
+        events.append(&mut get_events_resp.events);
+        continuation_token = get_events_resp.continuation_token;
 
         if continuation_token.is_none() {
-            break events;
+            break Ok(events);
         }
     }
 }
