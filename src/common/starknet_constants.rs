@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 //this file probably doesn't belong in this module
 use starknet::core::types::FieldElement;
 
