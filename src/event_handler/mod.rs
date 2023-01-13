@@ -36,12 +36,10 @@ pub async fn handle_transfer_events(
             } else {
                 blacklist.insert(contract_address);
             }
-        } else {
-            if transfer_event.keys.contains(&TRANSFER_SINGLE_EVENT_KEY) {
-                handle_erc1155_transfer_single(transfer_event, db).await;
-            } else {
-                handle_erc1155_transfer_batch(transfer_event, db).await;
-            }
+        } else if transfer_event.keys.contains(&TRANSFER_SINGLE_EVENT_KEY) {
+            handle_erc1155_transfer_single(transfer_event, db).await;
+        } else if transfer_event.keys.contains(&TRANSFER_BATCH_EVENT_KEY) {
+            handle_erc1155_transfer_batch(transfer_event, db).await;
         }
     }
 }
