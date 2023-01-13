@@ -1,6 +1,6 @@
 pub mod document;
 
-use crate::common::cairo_types::CairoUint256;
+use crate::common::{cairo_types::CairoUint256, errors::ConfigError};
 
 use self::document::{Contract, ERC1155Balance, ERC721};
 use async_trait::async_trait;
@@ -153,11 +153,10 @@ impl NftExt for Database {
     }
 }
 
-pub async fn connect() -> Database {
-    let client_url_with_options =
-        env::var("CLIENT_URL_WITH_OPTIONS").expect("configure your .env file");
-    let client_options = ClientOptions::parse(client_url_with_options).await.unwrap();
+pub async fn connect() -> Result<Database, ConfigError> {
+    let client_url_with_options = env::var("CONNECTION_STRING_WITH_OPTIONS")?;
+    let client_options = ClientOptions::parse(client_url_with_options).await?;
 
-    let client = Client::with_options(client_options).unwrap();
-    client.database("shovel")
+    let client = Client::with_options(client_options)?;
+    Ok(client.database("shovel"))
 }
