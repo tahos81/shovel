@@ -13,8 +13,8 @@ use dotenv::dotenv;
 async fn main() {
     dotenv().ok();
 
-    let db = db::connect().await;
     let rpc = rpc::setup_rpc();
+    let db = db::connect().await;
     let transfer_events = rpc::get_transfers_between(14791, 0, &rpc).await;
     event_handler::handle_transfer_events(transfer_events, &rpc, &db).await;
 }

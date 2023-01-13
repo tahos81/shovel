@@ -49,9 +49,6 @@ async fn handle_erc721_event(
 ) {
     if erc721_event.data[0] == ZERO_FELT {
         handle_erc721_mint(erc721_event, rpc, db).await;
-    } else if erc721_event.data[1] == ZERO_FELT {
-        // In order to show transfer data of burned NFTs we treat them like a transfer
-        handle_erc721_transfer(erc721_event, db).await;
     } else {
         handle_erc721_transfer(erc721_event, db).await;
     }
