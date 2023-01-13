@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use std::ops::{Add, Neg, Sub};
 
 use serde::{Deserialize, Serialize};
@@ -76,6 +78,16 @@ impl Sub for CairoUint256 {
 }
 
 impl CairoUint256 {
+    pub const ZERO: Self = CairoUint256 {
+        low: FieldElement::ZERO,
+        high: FieldElement::ZERO,
+    };
+
+    pub const ONE: Self = CairoUint256 {
+        low: FieldElement::ONE,
+        high: FieldElement::ZERO,
+    };
+
     /// Creates a new CairoUint256 from the given low and high FieldElements.
     pub fn new(low: FieldElement, high: FieldElement) -> Self {
         CairoUint256 { low, high }
