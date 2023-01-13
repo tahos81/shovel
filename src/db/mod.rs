@@ -4,6 +4,7 @@ use crate::common::{cairo_types::CairoUint256, errors::ConfigError};
 
 use self::document::{Contract, ERC1155Balance, ERC721};
 use async_trait::async_trait;
+use color_eyre::eyre::Result;
 use mongodb::{
     bson::doc, options::ClientOptions, options::UpdateOptions, Client, Collection, Database,
 };
@@ -17,10 +18,10 @@ pub trait NftExt {
         contract_address: FieldElement,
         token_id: CairoUint256,
         address: FieldElement,
-    ) -> Option<CairoUint256>;
-    async fn insert_contract(&self, contract: Contract);
-    async fn insert_erc721(&self, erc721: ERC721);
-    async fn insert_erc1155_balance(&self, erc1155_balance: ERC1155Balance);
+    ) -> Result<Option<CairoUint256>>;
+    async fn insert_contract(&self, contract: Contract) -> Result<()>;
+    async fn insert_erc721(&self, erc721: ERC721) -> Result<()>;
+    async fn insert_erc1155_balance(&self, erc1155_balance: ERC1155Balance) -> Result<()>;
     async fn update_erc721_owner(
         &self,
         contract_address: FieldElement,
@@ -28,15 +29,15 @@ pub trait NftExt {
         old_owner: FieldElement,
         new_owner: FieldElement,
         block_number: u64,
-    );
+    ) -> Result<()>;
     async fn update_erc1155_balance(
         &self,
         contract_address: FieldElement,
         token_id: CairoUint256,
         address: FieldElement,
         balance: CairoUint256,
-    );
-    async fn contract_exists(&self, contract_address: FieldElement) -> bool;
+    ) -> Result<()>;
+    async fn contract_exists(&self, contract_address: FieldElement) -> Result<bool>;
 }
 
 #[async_trait]
@@ -46,8 +47,9 @@ impl NftExt for Database {
         contract_address: FieldElement,
         token_id: CairoUint256,
         address: FieldElement,
-    ) -> Option<CairoUint256> {
-        self.collection::<ERC1155Balance>("erc1155_token_balances")
+    ) -> Result<Option<CairoUint256>> {
+        let balance = self
+            .collection::<ERC1155Balance>("erc1155_token_balances")
             .find_one(
                 doc! {
                     "_id.contract_address": contract_address.to_string(),
@@ -57,24 +59,27 @@ impl NftExt for Database {
                 },
                 None,
             )
-            .await
-            .unwrap()
-            .and_then(|response| Some(response.balance))
+            .await?
+            .and_then(|response| Some(response.balance));
+        Ok(balance)
     }
 
-    async fn insert_contract(&self, contract: Contract) {
+    async fn insert_contract(&self, contract: Contract) -> Result<()> {
         let collection: Collection<Contract> = self.collection("contracts");
-        collection.insert_one(contract, None).await.unwrap();
+        collection.insert_one(contract, None).await?;
+        Ok(())
     }
 
-    async fn insert_erc721(&self, erc721: ERC721) {
+    async fn insert_erc721(&self, erc721: ERC721) -> Result<()> {
         let collection: Collection<ERC721> = self.collection("erc721_tokens");
-        collection.insert_one(erc721, None).await.unwrap();
+        collection.insert_one(erc721, None).await?;
+        Ok(())
     }
 
-    async fn insert_erc1155_balance(&self, erc1155_balance: ERC1155Balance) {
+    async fn insert_erc1155_balance(&self, erc1155_balance: ERC1155Balance) -> Result<()> {
         let collection: Collection<ERC1155Balance> = self.collection("erc1155_token_balances");
-        collection.insert_one(erc1155_balance, None).await.unwrap();
+        collection.insert_one(erc1155_balance, None).await?;
+        Ok(())
     }
 
     async fn update_erc721_owner(
@@ -84,7 +89,7 @@ impl NftExt for Database {
         old_owner: FieldElement,
         new_owner: FieldElement,
         block_number: u64,
-    ) {
+    ) -> Result<()> {
         let collection: Collection<ERC721> = self.collection("erc721_tokens");
 
         let query = doc! {"_id": {
@@ -109,7 +114,8 @@ impl NftExt for Database {
 
         let options = UpdateOptions::builder().upsert(true).build();
 
-        collection.update_one(query, update, options).await.unwrap();
+        collection.update_one(query, update, options).await?;
+        Ok(())
     }
 
     async fn update_erc1155_balance(
@@ -118,7 +124,7 @@ impl NftExt for Database {
         token_id: CairoUint256,
         address: FieldElement,
         balance: CairoUint256,
-    ) {
+    ) -> Result<()> {
         let collection: Collection<ERC1155Balance> = self.collection("erc1155_token_balances");
 
         let query = doc! {"_id": {
@@ -141,15 +147,16 @@ impl NftExt for Database {
 
         let options = UpdateOptions::builder().upsert(true).build();
 
-        collection.update_one(query, update, options.clone()).await.unwrap();
+        collection.update_one(query, update, options.clone()).await?;
+        Ok(())
     }
 
-    async fn contract_exists(&self, contract_address: FieldElement) -> bool {
+    async fn contract_exists(&self, contract_address: FieldElement) -> Result<bool> {
         let collection: Collection<Contract> = self.collection("contracts");
         let query = doc! {"_id": contract_address.to_string()};
         //TODO: use find instead of find_one
-        let result = collection.find_one(query, None).await.unwrap();
-        result.is_some()
+        let result = collection.find_one(query, None).await?;
+        Ok(result.is_some())
     }
 }
 

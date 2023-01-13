@@ -65,6 +65,7 @@ pub struct ERC1155Metadata {
     pub token_uri: Option<String>,
 }
 
+#[allow(unused)]
 impl ERC1155Metadata {
     pub fn new(
         contract_address: FieldElement,

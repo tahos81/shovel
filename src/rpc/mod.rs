@@ -1,7 +1,7 @@
 use crate::common::errors::ConfigError;
 use crate::common::starknet_constants::*;
 use crate::common::traits::AsciiExt;
-use eyre::Result;
+use color_eyre::eyre::Result;
 use reqwest::Url;
 use starknet::core::types::FieldElement;
 use starknet::macros::selector;
@@ -59,18 +59,21 @@ pub async fn is_erc721(
     address: FieldElement,
     block_id: &BlockId,
     rpc: &JsonRpcClient<HttpTransport>,
-) -> bool {
-    let abi = rpc.get_class_at(block_id, address).await.unwrap().abi.unwrap();
+) -> Result<bool> {
+    let abi = match rpc.get_class_at(block_id, address).await?.abi {
+        Some(abi) => abi,
+        None => return Ok(false),
+    };
 
     for abi_entry in abi {
         if let Function(function_abi_entry) = abi_entry {
             if function_abi_entry.name == "ownerOf" || function_abi_entry.name == "owner_of" {
-                return true;
+                return Ok(true);
             }
         }
     }
 
-    false
+    Ok(false)
 }
 
 pub async fn get_name(
