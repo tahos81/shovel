@@ -12,7 +12,7 @@ use starknet::core::types::FieldElement;
 use std::env;
 
 #[async_trait]
-pub trait NftExt {
+pub trait DbInterface {
     async fn get_erc1155_balance(
         &self,
         contract_address: FieldElement,
@@ -41,7 +41,7 @@ pub trait NftExt {
 }
 
 #[async_trait]
-impl NftExt for Database {
+impl DbInterface for Database {
     async fn get_erc1155_balance(
         &self,
         contract_address: FieldElement,

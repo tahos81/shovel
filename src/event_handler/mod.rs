@@ -5,7 +5,7 @@ use crate::{
     common::cairo_types::CairoUint256,
     db::{
         document::{Contract, Erc721},
-        NftExt,
+        DbInterface,
     },
 };
 use color_eyre::eyre::Result;
