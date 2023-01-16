@@ -1,6 +1,5 @@
-use crate::common::cairo_types::CairoUint256;
-
 use super::document::{ContractMetadata, Erc1155Balance, Erc721};
+use crate::common::cairo_types::CairoUint256;
 use async_trait::async_trait;
 use color_eyre::eyre::Result;
 use mongodb::{bson::doc, options::UpdateOptions, Collection};
