@@ -1,15 +1,15 @@
 use crate::common::starknet_constants::*;
 use crate::db::document::Erc1155Balance;
+use crate::db::document::{ContractMetadata, Erc721};
 use crate::rpc;
 use crate::{
     common::cairo_types::CairoUint256,
-    db::{
-        document::{Contract, Erc721},
-        DbInterface,
+    db::collection_interface::{
+        ContractMetadataCollectionInterface, Erc1155CollectionInterface, Erc721CollectionInterface,
     },
 };
 use color_eyre::eyre::Result;
-use mongodb::Database;
+use mongodb::{Collection, Database};
 use starknet::core::types::FieldElement;
 use starknet::providers::jsonrpc::{
     models::{BlockId, EmittedEvent},
@@ -24,6 +24,11 @@ pub async fn handle_transfer_events(
     db: &Database,
 ) -> Result<()> {
     let mut blacklist: HashSet<FieldElement> = HashSet::new();
+
+    let contract_metadata_collection = db.collection::<ContractMetadata>("contract_metadata");
+    let erc721_collection = db.collection::<Erc721>("erc721_tokens");
+    let erc1155_collection = db.collection::<Erc1155Balance>("erc1155_token_balances");
+
     for transfer_event in transfer_events {
         if transfer_event.keys.contains(&TRANSFER_EVENT_KEY) {
             //possible ERC721
@@ -34,7 +39,13 @@ pub async fn handle_transfer_events(
                 && rpc::is_erc721(contract_address, &block_id, rpc).await?
             {
                 println!("handling ERC721 event");
-                handle_erc721_event(transfer_event, rpc, db).await?;
+                handle_erc721_event(
+                    transfer_event,
+                    rpc,
+                    &erc721_collection,
+                    &contract_metadata_collection,
+                )
+                .await?;
             } else {
                 if !blacklist.contains(&contract_address) {
                     println!("Blacklisting contract");
@@ -43,10 +54,10 @@ pub async fn handle_transfer_events(
             }
         } else if transfer_event.keys.contains(&TRANSFER_SINGLE_EVENT_KEY) {
             println!("handling ERC1155 single event");
-            handle_erc1155_transfer_single(transfer_event, db).await?;
+            handle_erc1155_transfer_single(transfer_event, &erc1155_collection).await?;
         } else if transfer_event.keys.contains(&TRANSFER_BATCH_EVENT_KEY) {
             println!("handling ERC1155 batch event");
-            handle_erc1155_transfer_batch(transfer_event, db).await?;
+            handle_erc1155_transfer_batch(transfer_event, &erc1155_collection).await?;
         }
     }
     Ok(())
@@ -55,13 +66,15 @@ pub async fn handle_transfer_events(
 async fn handle_erc721_event(
     erc721_event: EmittedEvent,
     rpc: &JsonRpcClient<HttpTransport>,
-    db: &Database,
+    erc721_collection: &Collection<Erc721>,
+    contract_metadata_collection: &Collection<ContractMetadata>,
 ) -> Result<()> {
     if erc721_event.data[0] == ZERO_FELT {
-        handle_erc721_mint(erc721_event, rpc, db).await?;
+        handle_erc721_mint(erc721_event, rpc, erc721_collection, contract_metadata_collection)
+            .await?;
         Ok(())
     } else {
-        handle_erc721_transfer(erc721_event, db).await?;
+        handle_erc721_transfer(erc721_event, erc721_collection).await?;
         Ok(())
     }
 }
@@ -69,7 +82,8 @@ async fn handle_erc721_event(
 async fn handle_erc721_mint(
     erc721_event: EmittedEvent,
     rpc: &JsonRpcClient<HttpTransport>,
-    db: &Database,
+    erc721_collection: &Collection<Erc721>,
+    contract_metadata_collection: &Collection<ContractMetadata>,
 ) -> Result<()> {
     let owner = erc721_event.data[1];
     let token_id = CairoUint256::new(erc721_event.data[2], erc721_event.data[3]);
@@ -77,25 +91,30 @@ async fn handle_erc721_mint(
     let block_id = BlockId::Number(erc721_event.block_number);
 
     let new_erc721 = Erc721::new(contract_address, token_id, owner, None);
-    db.insert_erc721(new_erc721).await?;
+    erc721_collection.insert_erc721(new_erc721).await?;
 
-    if !db.contract_exists(contract_address).await? {
+    if !contract_metadata_collection.contract_metadata_exists(contract_address).await? {
         let name = rpc::get_name(contract_address, &block_id, rpc).await;
         let symbol = rpc::get_symbol(contract_address, &block_id, rpc).await;
-        let new_contract = Contract::new(contract_address, name, symbol);
-        db.insert_contract(new_contract).await?;
+        let new_contract = ContractMetadata::new(contract_address, name, symbol);
+        contract_metadata_collection.insert_contract_metadata(new_contract).await?;
     }
     Ok(())
 }
 
-async fn handle_erc721_transfer(erc721_event: EmittedEvent, db: &Database) -> Result<()> {
+async fn handle_erc721_transfer(
+    erc721_event: EmittedEvent,
+    erc721_collection: &Collection<Erc721>,
+) -> Result<()> {
     let old_owner = erc721_event.data[0];
     let new_owner = erc721_event.data[1];
     let token_id = CairoUint256::new(erc721_event.data[2], erc721_event.data[3]);
 
     let contract_address = erc721_event.from_address;
     let block_number = erc721_event.block_number;
-    db.update_erc721_owner(contract_address, token_id, old_owner, new_owner, block_number).await?;
+    erc721_collection
+        .update_erc721_owner(contract_address, token_id, old_owner, new_owner, block_number)
+        .await?;
     Ok(())
 }
 
@@ -105,57 +124,77 @@ async fn erc1155_single_transfer(
     token_id: CairoUint256,
     amount: CairoUint256,
     contract_address: FieldElement,
-    db: &Database,
+    erc1155_collection: &Collection<Erc1155Balance>,
 ) -> Result<()> {
     // Update from balance
     if from_address != ZERO_FELT {
         // We know that from balance won't be zero
-        let from_balance =
-            match db.get_erc1155_balance(contract_address, token_id, from_address).await? {
-                Some(v) => v,
-                None => {
-                    println!("Impossible state, from balance 0, using amount as default");
-                    amount
-                }
-            };
+        let from_balance = match erc1155_collection
+            .get_erc1155_balance(contract_address, token_id, from_address)
+            .await?
+        {
+            Some(v) => v,
+            None => {
+                println!("Impossible state, from balance 0, using amount as default");
+                amount
+            }
+        };
 
         let new_balance = from_balance - amount;
-        db.update_erc1155_balance(contract_address, token_id, from_address, new_balance).await?;
+        erc1155_collection
+            .update_erc1155_balance(contract_address, token_id, from_address, new_balance)
+            .await?;
     }
 
     // Update to balance
-    match db.get_erc1155_balance(contract_address, token_id, from_address).await? {
+    match erc1155_collection.get_erc1155_balance(contract_address, token_id, from_address).await? {
         Some(previous_balance) => {
             let new_balance = previous_balance + amount;
-            db.update_erc1155_balance(contract_address, token_id, to_address, new_balance).await?;
+            erc1155_collection
+                .update_erc1155_balance(contract_address, token_id, to_address, new_balance)
+                .await?;
         }
         None => {
             // Do insert
-            db.insert_erc1155_balance(Erc1155Balance::new(
-                contract_address,
-                token_id,
-                to_address,
-                amount,
-            ))
-            .await?;
+            erc1155_collection
+                .insert_erc1155_balance(Erc1155Balance::new(
+                    contract_address,
+                    token_id,
+                    to_address,
+                    amount,
+                ))
+                .await?;
         }
     }
     Ok(())
 }
 
-async fn handle_erc1155_transfer_single(erc1155_event: EmittedEvent, db: &Database) -> Result<()> {
+async fn handle_erc1155_transfer_single(
+    erc1155_event: EmittedEvent,
+    erc1155_collection: &Collection<Erc1155Balance>,
+) -> Result<()> {
     let contract_address = erc1155_event.from_address;
     let from_address = erc1155_event.data[1];
     let to_address = erc1155_event.data[2];
     let token_id = CairoUint256::new(erc1155_event.data[3], erc1155_event.data[4]);
     let amount = CairoUint256::new(erc1155_event.data[5], erc1155_event.data[6]);
 
-    erc1155_single_transfer(from_address, to_address, token_id, amount, contract_address, db)
-        .await?;
+    erc1155_single_transfer(
+        from_address,
+        to_address,
+        token_id,
+        amount,
+        contract_address,
+        erc1155_collection,
+    )
+    .await?;
     Ok(())
 }
 
-async fn handle_erc1155_transfer_batch(erc1155_event: EmittedEvent, db: &Database) -> Result<()> {
+async fn handle_erc1155_transfer_batch(
+    erc1155_event: EmittedEvent,
+    erc1155_collection: &Collection<Erc1155Balance>,
+) -> Result<()> {
     let contract_address = erc1155_event.from_address;
     let from_address = erc1155_event.data[1];
     let to_address = erc1155_event.data[2];
@@ -179,8 +218,15 @@ async fn handle_erc1155_transfer_batch(erc1155_event: EmittedEvent, db: &Databas
 
     // For each token_id - amount pair, process a single transfer
     for (token_id, amount) in single_transfers {
-        erc1155_single_transfer(from_address, to_address, token_id, amount, contract_address, db)
-            .await?;
+        erc1155_single_transfer(
+            from_address,
+            to_address,
+            token_id,
+            amount,
+            contract_address,
+            erc1155_collection,
+        )
+        .await?;
     }
     Ok(())
 }
