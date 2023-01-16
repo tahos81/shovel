@@ -1,4 +1,4 @@
-pub mod collection_interface;
+pub mod collection;
 pub mod document;
 
 use crate::common::errors::ConfigError;

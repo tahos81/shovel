@@ -17,6 +17,7 @@ async fn main() -> Result<()> {
 
     let mut start_block = 14000;
     let range = 10;
+
     //loop
     while start_block < 16000 {
         println!("getting events between block {} and {}", start_block, start_block + range);

@@ -4,7 +4,7 @@ use crate::db::document::{ContractMetadata, Erc721};
 use crate::rpc;
 use crate::{
     common::cairo_types::CairoUint256,
-    db::collection_interface::{
+    db::collection::{
         ContractMetadataCollectionInterface, Erc1155CollectionInterface, Erc721CollectionInterface,
     },
 };
@@ -46,11 +46,9 @@ pub async fn handle_transfer_events(
                     &contract_metadata_collection,
                 )
                 .await?;
-            } else {
-                if !blacklist.contains(&contract_address) {
-                    println!("Blacklisting contract");
-                    blacklist.insert(contract_address);
-                }
+            } else if !blacklist.contains(&contract_address) {
+                println!("Blacklisting contract");
+                blacklist.insert(contract_address);
             }
         } else if transfer_event.keys.contains(&TRANSFER_SINGLE_EVENT_KEY) {
             println!("handling ERC1155 single event");
