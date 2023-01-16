@@ -46,6 +46,7 @@ pub async fn get_transfers_between(
         get_events_resp =
             rpc.get_events(transfer_filter.clone(), continuation_token, chunk_size).await?;
 
+        println!("got {} events", get_events_resp.events.len());
         events.append(&mut get_events_resp.events);
         continuation_token = get_events_resp.continuation_token;
 

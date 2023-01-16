@@ -33,14 +33,19 @@ pub async fn handle_transfer_events(
             if !blacklist.contains(&contract_address)
                 && rpc::is_erc721(contract_address, &block_id, rpc).await?
             {
+                println!("handling ERC721 event");
                 handle_erc721_event(transfer_event, rpc, db).await?;
             } else {
-                println!("Blacklisting contract");
-                blacklist.insert(contract_address);
+                if !blacklist.contains(&contract_address) {
+                    println!("Blacklisting contract");
+                    blacklist.insert(contract_address);
+                }
             }
         } else if transfer_event.keys.contains(&TRANSFER_SINGLE_EVENT_KEY) {
+            println!("handling ERC1155 single event");
             handle_erc1155_transfer_single(transfer_event, db).await?;
         } else if transfer_event.keys.contains(&TRANSFER_BATCH_EVENT_KEY) {
+            println!("handling ERC1155 batch event");
             handle_erc1155_transfer_batch(transfer_event, db).await?;
         }
     }

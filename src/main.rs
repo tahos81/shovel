@@ -15,14 +15,14 @@ async fn main() -> Result<()> {
     let rpc = rpc::setup_rpc()?;
     let db = db::connect().await?;
 
-    let mut start_block = 12000;
-    let range = 1;
+    let mut start_block = 14000;
+    let range = 10;
     //loop
     while start_block < 16000 {
         //tokio::spawn(async move || handle_transfers);
-        println!("start block: {}", start_block);
+        println!("getting events between block {} and {}", start_block, start_block + range);
         let transfer_events = rpc::get_transfers_between(start_block, range, &rpc).await?;
-        println!("got {} events", transfer_events.len());
+        println!("got {} events in total", transfer_events.len());
         event_handler::handle_transfer_events(transfer_events, &rpc, &db).await?;
         println!("events handled");
         start_block += range;

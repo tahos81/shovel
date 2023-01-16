@@ -66,18 +66,21 @@ impl NftExt for Database {
 
     async fn insert_contract(&self, contract: Contract) -> Result<()> {
         let collection: Collection<Contract> = self.collection("contracts");
+        println!("Inserting contract");
         collection.insert_one(contract, None).await?;
         Ok(())
     }
 
     async fn insert_erc721(&self, erc721: ERC721) -> Result<()> {
         let collection: Collection<ERC721> = self.collection("erc721_tokens");
+        println!("Inserting erc721");
         collection.insert_one(erc721, None).await?;
         Ok(())
     }
 
     async fn insert_erc1155_balance(&self, erc1155_balance: ERC1155Balance) -> Result<()> {
         let collection: Collection<ERC1155Balance> = self.collection("erc1155_token_balances");
+        println!("Inserting erc1155");
         collection.insert_one(erc1155_balance, None).await?;
         Ok(())
     }
@@ -113,6 +116,7 @@ impl NftExt for Database {
         };
 
         let options = UpdateOptions::builder().upsert(true).build();
+        println!("Updating erc721 owner");
 
         collection.update_one(query, update, options).await?;
         Ok(())
@@ -146,6 +150,7 @@ impl NftExt for Database {
         };
 
         let options = UpdateOptions::builder().upsert(true).build();
+        println!("Updating erc1155 balance");
 
         collection.update_one(query, update, options.clone()).await?;
         Ok(())
