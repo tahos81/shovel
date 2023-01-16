@@ -1,10 +1,10 @@
 use crate::common::starknet_constants::*;
-use crate::db::document::ERC1155Balance;
+use crate::db::document::Erc1155Balance;
 use crate::rpc;
 use crate::{
     common::cairo_types::CairoUint256,
     db::{
-        document::{Contract, ERC721},
+        document::{Contract, Erc721},
         NftExt,
     },
 };
@@ -76,7 +76,7 @@ async fn handle_erc721_mint(
     let contract_address = erc721_event.from_address;
     let block_id = BlockId::Number(erc721_event.block_number);
 
-    let new_erc721 = ERC721::new(contract_address, token_id, owner, None);
+    let new_erc721 = Erc721::new(contract_address, token_id, owner, None);
     db.insert_erc721(new_erc721).await?;
 
     if !db.contract_exists(contract_address).await? {
@@ -131,7 +131,7 @@ async fn erc1155_single_transfer(
         }
         None => {
             // Do insert
-            db.insert_erc1155_balance(ERC1155Balance::new(
+            db.insert_erc1155_balance(Erc1155Balance::new(
                 contract_address,
                 token_id,
                 to_address,

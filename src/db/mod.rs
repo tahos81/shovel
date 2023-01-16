@@ -2,7 +2,7 @@ pub mod document;
 
 use crate::common::{cairo_types::CairoUint256, errors::ConfigError};
 
-use self::document::{Contract, ERC1155Balance, ERC721};
+use self::document::{Contract, Erc1155Balance, Erc721};
 use async_trait::async_trait;
 use color_eyre::eyre::Result;
 use mongodb::{
@@ -20,8 +20,8 @@ pub trait NftExt {
         address: FieldElement,
     ) -> Result<Option<CairoUint256>>;
     async fn insert_contract(&self, contract: Contract) -> Result<()>;
-    async fn insert_erc721(&self, erc721: ERC721) -> Result<()>;
-    async fn insert_erc1155_balance(&self, erc1155_balance: ERC1155Balance) -> Result<()>;
+    async fn insert_erc721(&self, erc721: Erc721) -> Result<()>;
+    async fn insert_erc1155_balance(&self, erc1155_balance: Erc1155Balance) -> Result<()>;
     async fn update_erc721_owner(
         &self,
         contract_address: FieldElement,
@@ -49,7 +49,7 @@ impl NftExt for Database {
         address: FieldElement,
     ) -> Result<Option<CairoUint256>> {
         let balance = self
-            .collection::<ERC1155Balance>("erc1155_token_balances")
+            .collection::<Erc1155Balance>("erc1155_token_balances")
             .find_one(
                 doc! {
                     "_id.contract_address": contract_address.to_string(),
@@ -71,15 +71,15 @@ impl NftExt for Database {
         Ok(())
     }
 
-    async fn insert_erc721(&self, erc721: ERC721) -> Result<()> {
-        let collection: Collection<ERC721> = self.collection("erc721_tokens");
+    async fn insert_erc721(&self, erc721: Erc721) -> Result<()> {
+        let collection: Collection<Erc721> = self.collection("erc721_tokens");
         println!("Inserting erc721");
         collection.insert_one(erc721, None).await?;
         Ok(())
     }
 
-    async fn insert_erc1155_balance(&self, erc1155_balance: ERC1155Balance) -> Result<()> {
-        let collection: Collection<ERC1155Balance> = self.collection("erc1155_token_balances");
+    async fn insert_erc1155_balance(&self, erc1155_balance: Erc1155Balance) -> Result<()> {
+        let collection: Collection<Erc1155Balance> = self.collection("erc1155_token_balances");
         println!("Inserting erc1155");
         collection.insert_one(erc1155_balance, None).await?;
         Ok(())
@@ -93,7 +93,7 @@ impl NftExt for Database {
         new_owner: FieldElement,
         block_number: u64,
     ) -> Result<()> {
-        let collection: Collection<ERC721> = self.collection("erc721_tokens");
+        let collection: Collection<Erc721> = self.collection("erc721_tokens");
 
         let query = doc! {"_id": {
             "contract_address": contract_address.to_string(),
@@ -129,7 +129,7 @@ impl NftExt for Database {
         address: FieldElement,
         balance: CairoUint256,
     ) -> Result<()> {
-        let collection: Collection<ERC1155Balance> = self.collection("erc1155_token_balances");
+        let collection: Collection<Erc1155Balance> = self.collection("erc1155_token_balances");
 
         let query = doc! {"_id": {
             "contract_address": contract_address.to_string(),
