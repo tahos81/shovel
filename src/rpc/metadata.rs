@@ -1,4 +1,4 @@
-use std::{env, fmt::Display};
+use std::env;
 
 use color_eyre::eyre::Result;
 use reqwest::Client;
@@ -7,7 +7,7 @@ use starknet::{
     core::types::FieldElement,
     macros::{felt, selector},
     providers::jsonrpc::{
-        models::{BlockId, FunctionCall},
+        models::{BlockId, BlockTag::Latest, FunctionCall},
         HttpTransport, JsonRpcClient,
     },
 };
@@ -15,11 +15,26 @@ use starknet::{
 use crate::common::{cairo_types::CairoUint256, starknet_constants::ZERO_FELT, traits::AsciiExt};
 
 #[derive(Debug, Deserialize, Serialize)]
-struct Metadata {
+enum DisplayType {
+    number,
+    boost_percentage,
+    boost_number,
+    date,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct Attribute {
+    display_type: Option<DisplayType>,
+    trait_type: Option<String>,
+    value: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct TokenMetadata {
     name: String,
     description: String,
-    image: String,
-    //attributes: Vec<String>,
+    pub image: String,
+    attributes: Vec<Attribute>,
 }
 
 /// Gets the token URI for a given token ID
@@ -76,18 +91,25 @@ pub async fn get_starkrock_metadatas(rpc: &JsonRpcClient<HttpTransport>) -> Resu
 
     let starkrock_address =
         felt!("0x012f8e318fe04a1fe8bffe005ea4bbd19cb77a656b4f42682aab8a0ed20702f0");
-    let block_id = BlockId::Number(18000);
-    let token_id = CairoUint256::new(felt!("2"), felt!("0"));
+    let block_id = BlockId::Tag(Latest);
+    let token_id = CairoUint256::new(felt!("80"), felt!("0"));
     let token_uri = get_token_uri(starkrock_address, &block_id, rpc, token_id).await;
-    let formatted_uri = token_uri.replace("ipfs://", "");
+    let formatted_uri = token_uri.replace("ipfs://", ""); //trim start matches
 
     let base_url = "https://ipfs.infura.io:5001/api/v0/cat?arg=".to_string();
 
-    let url = base_url + &formatted_uri;
+    let url = base_url.clone() + &formatted_uri;
     let client = Client::new();
-    let req = client.post(url).basic_auth(username, Some(password));
+    let req = client.post(url).basic_auth(&username, Some(&password));
+    let resp = req.send().await?;
+    let metadata: TokenMetadata = resp.json().await?;
+    dbg!(&metadata);
+
+    let image_uri = metadata.image.trim_start_matches("ipfs://");
+    let url = base_url + image_uri;
+    let req = client.post(url).basic_auth(&username, Some(&password));
     let resp = req.send().await.unwrap();
-    let metadata: Metadata = resp.json().await?;
-    dbg!(metadata);
+    dbg!(resp.bytes().await?);
+
     Ok(())
 }
