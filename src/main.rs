@@ -12,7 +12,7 @@ use dotenv::dotenv;
 async fn main() -> Result<()> {
     dotenv().ok();
 
-    // let rpc = rpc::connect()?;
+    let rpc = rpc::connect()?;
     // let db = db::connect().await?;
 
     // let mut start_block = 8000;
@@ -28,6 +28,6 @@ async fn main() -> Result<()> {
     //     start_block += range;
     // }
     //loop
-    dbg!(rpc::metadata::get_ipfs().await);
+    rpc::metadata::get_starkrock_metadatas(&rpc).await?;
     Ok(())
 }
