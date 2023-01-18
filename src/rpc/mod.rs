@@ -1,3 +1,5 @@
+pub mod metadata;
+
 use crate::common::errors::ConfigError;
 use crate::common::starknet_constants::*;
 use crate::common::traits::AsciiExt;
@@ -89,9 +91,9 @@ pub async fn get_name(
     };
 
     let result = rpc.call(request, block_id).await.unwrap_or_default();
-    let result_felt = result.get(0).unwrap_or(&ZERO_FELT);
+    let result = result.get(0).unwrap_or(&ZERO_FELT);
 
-    result_felt.to_ascii()
+    result.to_ascii()
 }
 
 pub async fn get_symbol(
@@ -106,9 +108,9 @@ pub async fn get_symbol(
     };
 
     let result = rpc.call(request, block_id).await.unwrap_or_default();
-    let result_felt = result.get(0).unwrap_or(&ZERO_FELT);
+    let result = result.get(0).unwrap_or(&ZERO_FELT);
 
-    result_felt.to_ascii()
+    result.to_ascii()
 }
 
 /// Gets the token URI for a given token ID
