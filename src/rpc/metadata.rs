@@ -14,12 +14,18 @@ use starknet::{
 
 use crate::common::{cairo_types::CairoUint256, starknet_constants::ZERO_FELT, traits::AsciiExt};
 
+enum MetadataType {
+    Server(String),
+    Ipfs(String),
+    OnChain(String),
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 enum DisplayType {
-    number,
-    boost_percentage,
-    boost_number,
-    date,
+    Number,
+    BoostPercentage,
+    BoostNumber,
+    Date,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -85,21 +91,51 @@ pub async fn get_token_uri(
     }
 }
 
-pub async fn get_starkrock_metadatas(rpc: &JsonRpcClient<HttpTransport>) -> Result<()> {
-    let username = env::var("IPFS_USERNAME").unwrap();
-    let password = env::var("IPFS_PASSWORD").unwrap();
+pub async fn get_token_metadata(
+    //contract_address: FieldElement,
+    //id: CairoUint256,
+    rpc: &JsonRpcClient<HttpTransport>,
+) -> Result<()> {
+    let client = Client::new();
 
     let starkrock_address =
         felt!("0x012f8e318fe04a1fe8bffe005ea4bbd19cb77a656b4f42682aab8a0ed20702f0");
-    let block_id = BlockId::Tag(Latest);
     let token_id = CairoUint256::new(felt!("80"), felt!("0"));
+    let block_id = BlockId::Tag(Latest);
+
     let token_uri = get_token_uri(starkrock_address, &block_id, rpc, token_id).await;
-    let formatted_uri = token_uri.replace("ipfs://", ""); //trim start matches
+
+    let metadata_type = get_metadata_type(token_uri);
+
+    match metadata_type {
+        MetadataType::Ipfs(uri) => handle_ipfs_metadata(uri, &client).await?,
+        //MetadataType::Server(uri) => handle_server_metadata(uri, &client).await?,
+        //MetadataType::OnChain(uri) => handle_onchain_metadata(uri, rpc).await?,
+        _ => {}
+    }
+
+    Ok(())
+}
+
+fn get_metadata_type(uri: String) -> MetadataType {
+    if uri.starts_with("ipfs://") {
+        MetadataType::Ipfs(uri)
+    } else if uri.starts_with("http://") || uri.starts_with("https://") {
+        MetadataType::Server(uri)
+    } else {
+        MetadataType::OnChain(uri)
+    }
+}
+
+async fn handle_ipfs_metadata(uri: String, client: &Client) -> Result<()> {
+    let username = env::var("IPFS_USERNAME").unwrap();
+    let password = env::var("IPFS_PASSWORD").unwrap();
+
+    let formatted_uri = uri.trim_start_matches("ipfs://");
 
     let base_url = "https://ipfs.infura.io:5001/api/v0/cat?arg=".to_string();
+    let url = base_url.clone() + formatted_uri;
 
-    let url = base_url.clone() + &formatted_uri;
-    let client = Client::new();
     let req = client.post(url).basic_auth(&username, Some(&password));
     let resp = req.send().await?;
     let metadata: TokenMetadata = resp.json().await?;
@@ -110,6 +146,5 @@ pub async fn get_starkrock_metadatas(rpc: &JsonRpcClient<HttpTransport>) -> Resu
     let req = client.post(url).basic_auth(&username, Some(&password));
     let resp = req.send().await.unwrap();
     dbg!(resp.bytes().await?);
-
     Ok(())
 }

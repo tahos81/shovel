@@ -28,6 +28,6 @@ async fn main() -> Result<()> {
     //     start_block += range;
     // }
     //loop
-    rpc::metadata::get_starkrock_metadatas(&rpc).await?;
+    rpc::metadata::get_token_metadata(&rpc).await?;
     Ok(())
 }
