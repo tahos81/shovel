@@ -5,9 +5,9 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use starknet::{
     core::types::FieldElement,
-    macros::{felt, selector},
+    macros::selector,
     providers::jsonrpc::{
-        models::{BlockId, BlockTag::Latest, FunctionCall},
+        models::{BlockId, FunctionCall},
         HttpTransport, JsonRpcClient,
     },
 };
@@ -15,7 +15,7 @@ use starknet::{
 use crate::common::{cairo_types::CairoUint256, starknet_constants::ZERO_FELT, traits::AsciiExt};
 
 enum MetadataType {
-    Server(String),
+    Http(String),
     Ipfs(String),
     OnChain(String),
 }
@@ -36,11 +36,16 @@ struct Attribute {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-struct TokenMetadata {
-    name: String,
-    description: String,
-    pub image: String,
-    attributes: Vec<Attribute>,
+pub struct TokenMetadata {
+    image: Option<String>,
+    image_data: Option<String>,
+    external_url: Option<String>,
+    description: Option<String>,
+    name: Option<String>,
+    attributes: Option<Vec<Attribute>>,
+    background_color: Option<String>,
+    animation_url: Option<String>,
+    youtube_url: Option<String>,
 }
 
 /// Gets the token URI for a given token ID
@@ -91,43 +96,33 @@ pub async fn get_token_uri(
     }
 }
 
+/// Gets token metadata for a given uri
 pub async fn get_token_metadata(
-    //contract_address: FieldElement,
-    //id: CairoUint256,
+    uri: String,
     rpc: &JsonRpcClient<HttpTransport>,
-) -> Result<()> {
+) -> Result<TokenMetadata> {
     let client = Client::new();
 
-    let starkrock_address =
-        felt!("0x012f8e318fe04a1fe8bffe005ea4bbd19cb77a656b4f42682aab8a0ed20702f0");
-    let token_id = CairoUint256::new(felt!("80"), felt!("0"));
-    let block_id = BlockId::Tag(Latest);
-
-    let token_uri = get_token_uri(starkrock_address, &block_id, rpc, token_id).await;
-
-    let metadata_type = get_metadata_type(token_uri);
+    let metadata_type = get_metadata_type(uri);
 
     match metadata_type {
-        MetadataType::Ipfs(uri) => handle_ipfs_metadata(uri, &client).await?,
-        //MetadataType::Server(uri) => handle_server_metadata(uri, &client).await?,
-        //MetadataType::OnChain(uri) => handle_onchain_metadata(uri, rpc).await?,
-        _ => {}
+        MetadataType::Ipfs(uri) => Ok(handle_ipfs_metadata(uri, &client).await?),
+        MetadataType::Http(uri) => Ok(handle_http_metadata(uri, &client).await?),
+        MetadataType::OnChain(uri) => Ok(handle_onchain_metadata(uri).await?),
     }
-
-    Ok(())
 }
 
 fn get_metadata_type(uri: String) -> MetadataType {
     if uri.starts_with("ipfs://") {
         MetadataType::Ipfs(uri)
     } else if uri.starts_with("http://") || uri.starts_with("https://") {
-        MetadataType::Server(uri)
+        MetadataType::Http(uri)
     } else {
         MetadataType::OnChain(uri)
     }
 }
 
-async fn handle_ipfs_metadata(uri: String, client: &Client) -> Result<()> {
+async fn handle_ipfs_metadata(uri: String, client: &Client) -> Result<TokenMetadata> {
     let username = env::var("IPFS_USERNAME").unwrap();
     let password = env::var("IPFS_PASSWORD").unwrap();
 
@@ -139,12 +134,16 @@ async fn handle_ipfs_metadata(uri: String, client: &Client) -> Result<()> {
     let req = client.post(url).basic_auth(&username, Some(&password));
     let resp = req.send().await?;
     let metadata: TokenMetadata = resp.json().await?;
-    dbg!(&metadata);
+    Ok(metadata)
+}
 
-    let image_uri = metadata.image.trim_start_matches("ipfs://");
-    let url = base_url + image_uri;
-    let req = client.post(url).basic_auth(&username, Some(&password));
-    let resp = req.send().await.unwrap();
-    dbg!(resp.bytes().await?);
-    Ok(())
+async fn handle_http_metadata(uri: String, client: &Client) -> Result<TokenMetadata> {
+    let resp = client.get(uri).send().await?;
+    let metadata: TokenMetadata = resp.json().await?;
+    Ok(metadata)
+}
+
+async fn handle_onchain_metadata(uri: String) -> Result<TokenMetadata> {
+    let metadata: TokenMetadata = serde_json::from_str(&uri)?;
+    Ok(metadata)
 }

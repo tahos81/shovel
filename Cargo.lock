@@ -1957,6 +1957,7 @@ dependencies = [
  "mongodb",
  "reqwest",
  "serde",
+ "serde_json",
  "starknet",
  "thiserror",
  "tokio",
