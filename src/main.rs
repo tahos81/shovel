@@ -12,14 +12,14 @@ use dotenv::dotenv;
 async fn main() -> Result<()> {
     dotenv().ok();
 
-    let rpc = rpc::setup_rpc()?;
+    let rpc = rpc::connect()?;
     let db = db::connect().await?;
 
     let mut start_block = 14000;
     let range = 10;
+
     //loop
     while start_block < 16000 {
-        //tokio::spawn(async move || handle_transfers);
         println!("getting events between block {} and {}", start_block, start_block + range);
         let transfer_events = rpc::get_transfers_between(start_block, range, &rpc).await?;
         println!("got {} events in total", transfer_events.len());

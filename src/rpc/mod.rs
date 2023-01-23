@@ -15,7 +15,7 @@ use std::env;
 
 use crate::common::cairo_types::CairoUint256;
 
-pub fn setup_rpc() -> Result<JsonRpcClient<HttpTransport>, ConfigError> {
+pub fn connect() -> Result<JsonRpcClient<HttpTransport>, ConfigError> {
     let rpc_url = env::var("STARKNET_MAINNET_RPC")?;
     let parsed_url = Url::parse(&rpc_url)?;
     Ok(JsonRpcClient::new(HttpTransport::new(parsed_url)))

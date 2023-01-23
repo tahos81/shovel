@@ -11,13 +11,13 @@ pub struct AddressAtBlock {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct Contract {
+pub struct ContractMetadata {
     pub _id: FieldElement,
     pub name: String,
     pub symbol: String,
 }
 
-impl Contract {
+impl ContractMetadata {
     pub fn new(contract_address: FieldElement, name: String, symbol: String) -> Self {
         Self { _id: contract_address, name, symbol }
     }
