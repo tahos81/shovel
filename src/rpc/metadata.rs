@@ -1,52 +1,20 @@
 use std::env;
 
+use crate::common::{
+    cairo_types::CairoUint256,
+    starknet_constants::{TOKEN_URI_SELECTOR, ZERO_FELT},
+    traits::AsciiExt,
+};
+use crate::db::document::{MetadataType, TokenMetadata};
 use color_eyre::eyre::Result;
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
 use starknet::{
     core::types::FieldElement,
-    macros::selector,
     providers::jsonrpc::{
         models::{BlockId, FunctionCall},
         HttpTransport, JsonRpcClient,
     },
 };
-
-use crate::common::{cairo_types::CairoUint256, starknet_constants::ZERO_FELT, traits::AsciiExt};
-
-enum MetadataType {
-    Http(String),
-    Ipfs(String),
-    OnChain(String),
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-enum DisplayType {
-    Number,
-    BoostPercentage,
-    BoostNumber,
-    Date,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-struct Attribute {
-    display_type: Option<DisplayType>,
-    trait_type: Option<String>,
-    value: String,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct TokenMetadata {
-    image: Option<String>,
-    image_data: Option<String>,
-    external_url: Option<String>,
-    description: Option<String>,
-    name: Option<String>,
-    attributes: Option<Vec<Attribute>>,
-    background_color: Option<String>,
-    animation_url: Option<String>,
-    youtube_url: Option<String>,
-}
 
 /// Gets the token URI for a given token ID
 pub async fn get_token_uri(
@@ -59,7 +27,7 @@ pub async fn get_token_uri(
     // uint256 -> [ felt, felt ]
     let request = FunctionCall {
         contract_address: address,
-        entry_point_selector: selector!("tokenURI"),
+        entry_point_selector: TOKEN_URI_SELECTOR,
         calldata: vec![token_id.low, token_id.high],
     };
 
@@ -97,10 +65,7 @@ pub async fn get_token_uri(
 }
 
 /// Gets token metadata for a given uri
-pub async fn get_token_metadata(
-    uri: String,
-    rpc: &JsonRpcClient<HttpTransport>,
-) -> Result<TokenMetadata> {
+pub async fn get_token_metadata(uri: String) -> Result<TokenMetadata> {
     let client = Client::new();
 
     let metadata_type = get_metadata_type(uri);
@@ -129,7 +94,7 @@ async fn handle_ipfs_metadata(uri: String, client: &Client) -> Result<TokenMetad
     let formatted_uri = uri.trim_start_matches("ipfs://");
 
     let base_url = "https://ipfs.infura.io:5001/api/v0/cat?arg=".to_string();
-    let url = base_url.clone() + formatted_uri;
+    let url = base_url + formatted_uri;
 
     let req = client.post(url).basic_auth(&username, Some(&password));
     let resp = req.send().await?;

@@ -6,7 +6,6 @@ use crate::common::traits::AsciiExt;
 use color_eyre::eyre::Result;
 use reqwest::Url;
 use starknet::core::types::FieldElement;
-use starknet::macros::selector;
 use starknet::providers::jsonrpc::{
     models::{
         BlockId, ContractAbiEntry::Function, EmittedEvent, EventFilter, EventsPage, FunctionCall,
@@ -14,8 +13,6 @@ use starknet::providers::jsonrpc::{
     HttpTransport, JsonRpcClient,
 };
 use std::env;
-
-use crate::common::cairo_types::CairoUint256;
 
 pub fn connect() -> Result<JsonRpcClient<HttpTransport>, ConfigError> {
     let rpc_url = env::var("STARKNET_MAINNET_RPC")?;

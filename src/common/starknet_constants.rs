@@ -47,7 +47,7 @@ pub const SYMBOL_SELECTOR: FieldElement = FieldElement::from_mont([
 ]);
 
 /// felt!("0x12a7823b0c6bee58f8c694888f32f862c6584caa8afa0242de046d298ba684d");
-pub const _TOKEN_URI_SELECTOR: FieldElement = FieldElement::from_mont([
+pub const TOKEN_URI_SELECTOR: FieldElement = FieldElement::from_mont([
     2091095801852678759,
     17231162349608376638,
     6222938823409426658,

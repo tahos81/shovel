@@ -99,3 +99,37 @@ impl Erc1155Balance {
         Self { _id: Erc1155BalanceId { contract_address, token_id, owner }, balance }
     }
 }
+
+pub enum MetadataType {
+    Http(String),
+    Ipfs(String),
+    OnChain(String),
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+enum DisplayType {
+    Number,
+    BoostPercentage,
+    BoostNumber,
+    Date,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct Attribute {
+    display_type: Option<DisplayType>,
+    trait_type: Option<String>,
+    value: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct TokenMetadata {
+    image: Option<String>,
+    image_data: Option<String>,
+    external_url: Option<String>,
+    description: Option<String>,
+    name: Option<String>,
+    attributes: Option<Vec<Attribute>>,
+    background_color: Option<String>,
+    animation_url: Option<String>,
+    youtube_url: Option<String>,
+}
