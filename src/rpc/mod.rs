@@ -1,7 +1,9 @@
 pub mod metadata;
 
 use crate::common::errors::ConfigError;
-use crate::common::starknet_constants::*;
+use crate::common::starknet_constants::{
+    TRANSFER_BATCH_EVENT_KEY, TRANSFER_EVENT_KEY, TRANSFER_SINGLE_EVENT_KEY,
+};
 use color_eyre::eyre::Result;
 use reqwest::Url;
 use starknet::core::types::FieldElement;

@@ -73,7 +73,7 @@ impl Erc721CollectionInterface for Collection<Erc721> {
             "$push": {
                 "previous_owners": {
                     "address": old_owner.to_string(),
-                    "block": block_number as i64
+                    "block": block_number as i32
                 }
             }
         };

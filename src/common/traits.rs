@@ -1,11 +1,11 @@
 use starknet::core::types::FieldElement;
 
-/// Trait for converting a FieldElement to a string
+/// Trait for converting a `FieldElement` to a string
 pub trait AsciiExt {
     fn to_ascii(&self) -> String;
 }
 
-/// Converts a FieldElement to a string by converting the bytes to ascii
+/// Converts a `FieldElement` to a string by converting the bytes to ascii
 /// and trimming the null bytes.
 impl AsciiExt for FieldElement {
     fn to_ascii(&self) -> String {

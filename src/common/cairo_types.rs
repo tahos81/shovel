@@ -77,7 +77,7 @@ impl CairoUint256 {
 
     pub const ONE: Self = CairoUint256 { low: FieldElement::ONE, high: FieldElement::ZERO };
 
-    /// Creates a new CairoUint256 from the given low and high `FieldElement`s.
+    /// Creates a new `CairoUint256` from the given low and high `FieldElement`s.
     pub fn new(low: FieldElement, high: FieldElement) -> Self {
         CairoUint256 { low, high }
     }

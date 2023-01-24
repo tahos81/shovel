@@ -119,10 +119,17 @@ enum DisplayType {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+enum AttributeValue {
+    Int(i128),
+    Float(f64),
+    String(String),
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 struct Attribute {
     display_type: Option<DisplayType>,
     trait_type: Option<String>,
-    value: String,
+    value: AttributeValue,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

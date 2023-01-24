@@ -15,7 +15,7 @@ async fn main() -> Result<()> {
     let rpc = rpc::connect()?;
     let db = db::connect().await?;
 
-    let mut start_block = 8000;
+    let mut start_block = 14000;
     let range = 20;
 
     while start_block < 16000 {

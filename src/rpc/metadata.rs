@@ -1,4 +1,4 @@
-pub mod token_metadata {
+pub mod token {
     use crate::common::{
         cairo_types::CairoUint256,
         starknet_constants::{TOKEN_URI_SELECTOR, ZERO_FELT},
@@ -73,20 +73,20 @@ pub mod token_metadata {
         match metadata_type {
             MetadataType::Ipfs(uri) => Ok(get_ipfs_metadata(uri, &client).await?),
             MetadataType::Http(uri) => Ok(get_http_metadata(uri, &client).await?),
-            MetadataType::OnChain(uri) => Ok(get_onchain_metadata(uri).await?),
+            MetadataType::OnChain(uri) => Ok(get_onchain_metadata(uri)?),
         }
     }
 
     async fn get_ipfs_metadata(uri: &str, client: &Client) -> Result<TokenMetadata> {
-        let username = env::var("IPFS_USERNAME").unwrap();
-        let password = env::var("IPFS_PASSWORD").unwrap();
+        let username = env::var("IPFS_USERNAME")?;
+        let password = env::var("IPFS_PASSWORD")?;
 
-        let formatted_uri = uri.trim_start_matches("ipfs://");
+        let mut ipfs_url = "https://ipfs.infura.io:5001/api/v0/cat?arg=".to_string();
+        let ipfs_hash = uri.trim_start_matches("ipfs://");
 
-        let base_url = "https://ipfs.infura.io:5001/api/v0/cat?arg=".to_string();
-        let url = base_url + formatted_uri;
+        ipfs_url.push_str(ipfs_hash);
 
-        let req = client.post(url).basic_auth(&username, Some(&password));
+        let req = client.post(ipfs_url).basic_auth(&username, Some(&password));
         let resp = req.send().await?;
         let metadata: TokenMetadata = resp.json().await?;
         Ok(metadata)
@@ -98,8 +98,8 @@ pub mod token_metadata {
         Ok(metadata)
     }
 
-    async fn get_onchain_metadata(uri: &str) -> Result<TokenMetadata> {
-        let metadata: TokenMetadata = serde_json::from_str(&uri)?;
+    fn get_onchain_metadata(uri: &str) -> Result<TokenMetadata> {
+        let metadata: TokenMetadata = serde_json::from_str(uri)?;
         Ok(metadata)
     }
 
@@ -114,7 +114,7 @@ pub mod token_metadata {
     }
 }
 
-pub mod contract_metadata {
+pub mod contract {
     use crate::common::starknet_constants::{NAME_SELECTOR, SYMBOL_SELECTOR, ZERO_FELT};
     use crate::common::traits::AsciiExt;
     use color_eyre::eyre::Result;
