@@ -12,6 +12,3 @@ pub enum ConfigError {
     #[error("Something is wrong with your connection string")]
     InvalidConnectionString(#[from] mongodb::error::Error),
 }
-
-#[derive(Debug, Error)]
-pub enum RpcError {}

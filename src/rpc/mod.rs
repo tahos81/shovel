@@ -2,14 +2,12 @@ pub mod metadata;
 
 use crate::common::errors::ConfigError;
 use crate::common::starknet_constants::*;
-use crate::common::traits::AsciiExt;
+
 use color_eyre::eyre::Result;
 use reqwest::Url;
 use starknet::core::types::FieldElement;
 use starknet::providers::jsonrpc::{
-    models::{
-        BlockId, ContractAbiEntry::Function, EmittedEvent, EventFilter, EventsPage, FunctionCall,
-    },
+    models::{BlockId, EmittedEvent, EventFilter, EventsPage},
     HttpTransport, JsonRpcClient,
 };
 use std::env;
@@ -53,59 +51,4 @@ pub async fn get_transfers_between(
             break Ok(events);
         }
     }
-}
-
-pub async fn is_erc721(
-    address: FieldElement,
-    block_id: &BlockId,
-    rpc: &JsonRpcClient<HttpTransport>,
-) -> Result<bool> {
-    let abi = match rpc.get_class_at(block_id, address).await?.abi {
-        Some(abi) => abi,
-        None => return Ok(false),
-    };
-
-    for abi_entry in abi {
-        if let Function(function_abi_entry) = abi_entry {
-            if function_abi_entry.name == "ownerOf" || function_abi_entry.name == "owner_of" {
-                return Ok(true);
-            }
-        }
-    }
-
-    Ok(false)
-}
-
-pub async fn get_name(
-    address: FieldElement,
-    block_id: &BlockId,
-    rpc: &JsonRpcClient<HttpTransport>,
-) -> String {
-    let request = FunctionCall {
-        contract_address: address,
-        entry_point_selector: NAME_SELECTOR,
-        calldata: vec![],
-    };
-
-    let result = rpc.call(request, block_id).await.unwrap_or_default();
-    let result = result.get(0).unwrap_or(&ZERO_FELT);
-
-    result.to_ascii()
-}
-
-pub async fn get_symbol(
-    address: FieldElement,
-    block_id: &BlockId,
-    rpc: &JsonRpcClient<HttpTransport>,
-) -> String {
-    let request = FunctionCall {
-        contract_address: address,
-        entry_point_selector: SYMBOL_SELECTOR,
-        calldata: vec![],
-    };
-
-    let result = rpc.call(request, block_id).await.unwrap_or_default();
-    let result = result.get(0).unwrap_or(&ZERO_FELT);
-
-    result.to_ascii()
 }

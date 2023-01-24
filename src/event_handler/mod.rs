@@ -1,7 +1,7 @@
 use crate::common::starknet_constants::*;
 use crate::db::document::Erc1155Balance;
 use crate::db::document::{ContractMetadata, Erc721};
-use crate::rpc;
+use crate::rpc::{self, metadata::contract_metadata};
 use crate::{
     common::cairo_types::CairoUint256,
     db::collection::{
@@ -36,7 +36,7 @@ pub async fn handle_transfer_events(
             let block_id = BlockId::Number(transfer_event.block_number);
             //probably should hardcode ether address
             if !blacklist.contains(&contract_address)
-                && rpc::is_erc721(contract_address, &block_id, rpc).await?
+                && contract_metadata::is_erc721(contract_address, &block_id, rpc).await?
             {
                 println!("handling ERC721 event");
                 handle_erc721_event(
@@ -92,8 +92,8 @@ async fn handle_erc721_mint(
     erc721_collection.insert_erc721(new_erc721).await?;
 
     if !contract_metadata_collection.contract_metadata_exists(contract_address).await? {
-        let name = rpc::get_name(contract_address, &block_id, rpc).await;
-        let symbol = rpc::get_symbol(contract_address, &block_id, rpc).await;
+        let name = contract_metadata::get_name(contract_address, &block_id, rpc).await;
+        let symbol = contract_metadata::get_symbol(contract_address, &block_id, rpc).await;
         let new_contract = ContractMetadata::new(contract_address, name, symbol);
         contract_metadata_collection.insert_contract_metadata(new_contract).await?;
     }
