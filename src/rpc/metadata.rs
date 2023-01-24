@@ -1,6 +1,4 @@
 pub mod token_metadata {
-    use std::env;
-
     use crate::common::{
         cairo_types::CairoUint256,
         starknet_constants::{TOKEN_URI_SELECTOR, ZERO_FELT},
@@ -16,6 +14,7 @@ pub mod token_metadata {
             HttpTransport, JsonRpcClient,
         },
     };
+    use std::env;
 
     /// Gets the token URI for a given token ID
     pub async fn get_token_uri(

@@ -15,7 +15,6 @@ use starknet::providers::jsonrpc::{
     models::{BlockId, EmittedEvent},
     HttpTransport, JsonRpcClient,
 };
-
 use std::collections::HashSet;
 
 pub async fn handle_transfer_events(

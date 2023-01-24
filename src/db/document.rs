@@ -1,8 +1,7 @@
+use crate::common::cairo_types::CairoUint256;
 use mongodb::bson::doc;
 use serde::{self, Deserialize, Serialize};
 use starknet::core::types::FieldElement;
-
-use crate::common::cairo_types::CairoUint256;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct AddressAtBlock {

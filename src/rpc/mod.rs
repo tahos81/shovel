@@ -2,7 +2,6 @@ pub mod metadata;
 
 use crate::common::errors::ConfigError;
 use crate::common::starknet_constants::*;
-
 use color_eyre::eyre::Result;
 use reqwest::Url;
 use starknet::core::types::FieldElement;
