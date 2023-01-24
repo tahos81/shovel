@@ -15,10 +15,9 @@ async fn main() -> Result<()> {
     let rpc = rpc::connect()?;
     let db = db::connect().await?;
 
-    let mut start_block = 14000;
-    let range = 10;
+    let mut start_block = 8000;
+    let range = 20;
 
-    //loop
     while start_block < 16000 {
         println!("getting events between block {} and {}", start_block, start_block + range);
         let transfer_events = rpc::get_transfers_between(start_block, range, &rpc).await?;
@@ -27,6 +26,6 @@ async fn main() -> Result<()> {
         println!("events handled");
         start_block += range;
     }
-    //loop
+
     Ok(())
 }

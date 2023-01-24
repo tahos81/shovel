@@ -1,8 +1,7 @@
+use crate::common::cairo_types::CairoUint256;
 use mongodb::bson::doc;
 use serde::{self, Deserialize, Serialize};
 use starknet::core::types::FieldElement;
-
-use crate::common::cairo_types::CairoUint256;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct AddressAtBlock {
@@ -34,7 +33,8 @@ pub struct Erc721 {
     pub _id: Erc721Id,
     pub owner: FieldElement,
     pub previous_owners: Vec<AddressAtBlock>,
-    pub token_uri: Option<String>,
+    pub token_uri: String,
+    pub metadata: TokenMetadata,
 }
 
 impl Erc721 {
@@ -42,13 +42,15 @@ impl Erc721 {
         contract_address: FieldElement,
         token_id: CairoUint256,
         owner: FieldElement,
-        token_uri: Option<String>,
+        token_uri: String,
+        metadata: TokenMetadata,
     ) -> Self {
         Self {
             _id: Erc721Id { contract_address, token_id },
             owner,
             previous_owners: vec![],
             token_uri,
+            metadata,
         }
     }
 }
@@ -62,7 +64,8 @@ pub struct Erc1155MetadataId {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Erc1155Metadata {
     pub _id: Erc1155MetadataId,
-    pub token_uri: Option<String>,
+    pub token_uri: String,
+    pub metadata: TokenMetadata,
 }
 
 #[allow(unused)]
@@ -70,9 +73,10 @@ impl Erc1155Metadata {
     pub fn new(
         contract_address: FieldElement,
         token_id: CairoUint256,
-        token_uri: Option<String>,
+        token_uri: String,
+        metadata: TokenMetadata,
     ) -> Self {
-        Self { _id: Erc1155MetadataId { contract_address, token_id }, token_uri }
+        Self { _id: Erc1155MetadataId { contract_address, token_id }, token_uri, metadata }
     }
 }
 
@@ -98,4 +102,38 @@ impl Erc1155Balance {
     ) -> Self {
         Self { _id: Erc1155BalanceId { contract_address, token_id, owner }, balance }
     }
+}
+
+pub enum MetadataType<'a> {
+    Http(&'a str),
+    Ipfs(&'a str),
+    OnChain(&'a str),
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+enum DisplayType {
+    Number,
+    BoostPercentage,
+    BoostNumber,
+    Date,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct Attribute {
+    display_type: Option<DisplayType>,
+    trait_type: Option<String>,
+    value: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct TokenMetadata {
+    image: Option<String>,
+    image_data: Option<String>,
+    external_url: Option<String>,
+    description: Option<String>,
+    name: Option<String>,
+    attributes: Option<Vec<Attribute>>,
+    background_color: Option<String>,
+    animation_url: Option<String>,
+    youtube_url: Option<String>,
 }
