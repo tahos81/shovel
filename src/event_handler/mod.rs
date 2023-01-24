@@ -1,7 +1,7 @@
 use crate::common::starknet_constants::*;
 use crate::db::document::Erc1155Balance;
 use crate::db::document::{ContractMetadata, Erc721};
-use crate::rpc::{self, metadata::contract_metadata};
+use crate::rpc::{metadata::contract_metadata, metadata::token_metadata};
 use crate::{
     common::cairo_types::CairoUint256,
     db::collection::{
@@ -87,8 +87,10 @@ async fn handle_erc721_mint(
     let token_id = CairoUint256::new(erc721_event.data[2], erc721_event.data[3]);
     let contract_address = erc721_event.from_address;
     let block_id = BlockId::Number(erc721_event.block_number);
+    let token_uri = token_metadata::get_token_uri(contract_address, &block_id, rpc, token_id).await;
+    let metadata = token_metadata::get_token_metadata(&token_uri).await?;
 
-    let new_erc721 = Erc721::new(contract_address, token_id, owner, None);
+    let new_erc721 = Erc721::new(contract_address, token_id, owner, token_uri, metadata);
     erc721_collection.insert_erc721(new_erc721).await?;
 
     if !contract_metadata_collection.contract_metadata_exists(contract_address).await? {
@@ -97,6 +99,7 @@ async fn handle_erc721_mint(
         let new_contract = ContractMetadata::new(contract_address, name, symbol);
         contract_metadata_collection.insert_contract_metadata(new_contract).await?;
     }
+
     Ok(())
 }
 

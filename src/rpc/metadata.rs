@@ -66,7 +66,7 @@ pub mod token_metadata {
     }
 
     /// Gets token metadata for a given uri
-    pub async fn get_token_metadata(uri: String) -> Result<TokenMetadata> {
+    pub async fn get_token_metadata(uri: &str) -> Result<TokenMetadata> {
         let client = Client::new();
 
         let metadata_type = get_metadata_type(uri);
@@ -78,7 +78,7 @@ pub mod token_metadata {
         }
     }
 
-    async fn get_ipfs_metadata(uri: String, client: &Client) -> Result<TokenMetadata> {
+    async fn get_ipfs_metadata(uri: &str, client: &Client) -> Result<TokenMetadata> {
         let username = env::var("IPFS_USERNAME").unwrap();
         let password = env::var("IPFS_PASSWORD").unwrap();
 
@@ -93,18 +93,18 @@ pub mod token_metadata {
         Ok(metadata)
     }
 
-    async fn get_http_metadata(uri: String, client: &Client) -> Result<TokenMetadata> {
+    async fn get_http_metadata(uri: &str, client: &Client) -> Result<TokenMetadata> {
         let resp = client.get(uri).send().await?;
         let metadata: TokenMetadata = resp.json().await?;
         Ok(metadata)
     }
 
-    async fn get_onchain_metadata(uri: String) -> Result<TokenMetadata> {
+    async fn get_onchain_metadata(uri: &str) -> Result<TokenMetadata> {
         let metadata: TokenMetadata = serde_json::from_str(&uri)?;
         Ok(metadata)
     }
 
-    fn get_metadata_type(uri: String) -> MetadataType {
+    fn get_metadata_type(uri: &str) -> MetadataType {
         if uri.starts_with("ipfs://") {
             MetadataType::Ipfs(uri)
         } else if uri.starts_with("http://") || uri.starts_with("https://") {

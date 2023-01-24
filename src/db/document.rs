@@ -34,7 +34,8 @@ pub struct Erc721 {
     pub _id: Erc721Id,
     pub owner: FieldElement,
     pub previous_owners: Vec<AddressAtBlock>,
-    pub token_uri: Option<String>,
+    pub token_uri: String,
+    pub metadata: TokenMetadata,
 }
 
 impl Erc721 {
@@ -42,13 +43,15 @@ impl Erc721 {
         contract_address: FieldElement,
         token_id: CairoUint256,
         owner: FieldElement,
-        token_uri: Option<String>,
+        token_uri: String,
+        metadata: TokenMetadata,
     ) -> Self {
         Self {
             _id: Erc721Id { contract_address, token_id },
             owner,
             previous_owners: vec![],
             token_uri,
+            metadata,
         }
     }
 }
@@ -62,7 +65,8 @@ pub struct Erc1155MetadataId {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Erc1155Metadata {
     pub _id: Erc1155MetadataId,
-    pub token_uri: Option<String>,
+    pub token_uri: String,
+    pub metadata: TokenMetadata,
 }
 
 #[allow(unused)]
@@ -70,9 +74,10 @@ impl Erc1155Metadata {
     pub fn new(
         contract_address: FieldElement,
         token_id: CairoUint256,
-        token_uri: Option<String>,
+        token_uri: String,
+        metadata: TokenMetadata,
     ) -> Self {
-        Self { _id: Erc1155MetadataId { contract_address, token_id }, token_uri }
+        Self { _id: Erc1155MetadataId { contract_address, token_id }, token_uri, metadata }
     }
 }
 
@@ -100,10 +105,10 @@ impl Erc1155Balance {
     }
 }
 
-pub enum MetadataType {
-    Http(String),
-    Ipfs(String),
-    OnChain(String),
+pub enum MetadataType<'a> {
+    Http(&'a str),
+    Ipfs(&'a str),
+    OnChain(&'a str),
 }
 
 #[derive(Debug, Deserialize, Serialize)]
