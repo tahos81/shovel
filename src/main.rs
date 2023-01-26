@@ -13,10 +13,12 @@ async fn main() -> Result<()> {
     dotenv().ok();
 
     let rpc = rpc::connect()?;
-    let db = db::connect().await?;
+    let (db, mut session) = db::connect().await?;
 
     let mut start_block = 14000;
     let range = 20;
+
+    session.start_transaction(None).await?;
 
     while start_block < 16000 {
         println!("getting events between block {} and {}", start_block, start_block + range);
@@ -26,6 +28,8 @@ async fn main() -> Result<()> {
         println!("events handled");
         start_block += range;
     }
+
+    session.commit_transaction().await?;
 
     Ok(())
 }
