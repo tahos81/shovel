@@ -83,7 +83,6 @@ pub mod token {
 
         let mut ipfs_url = "https://ipfs.infura.io:5001/api/v0/cat?arg=".to_string();
         let ipfs_hash = uri.trim_start_matches("ipfs://");
-
         ipfs_url.push_str(ipfs_hash);
 
         let req = client.post(ipfs_url).basic_auth(&username, Some(&password));
