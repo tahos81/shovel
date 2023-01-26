@@ -2,17 +2,15 @@
 
 ---
 
--   [x] Handle burns
--   [x] Handle ERC1155 tokens
--   [x] Graceful error handling
--   [x] Handle proxies
--   [ ] Parse token metadata from tokenURI
--   [ ] Add the missing fields in our data model
--   [ ] Iterate whole chain
--   [ ] Start listening for new events
--   [ ] Write tests
+-   [ ] Amazon buckets integration for lazy image caching
+-   [ ] Use transactions for DB operations
+-   [ ] Start inserting erc1155Metadata to db
+-   [ ] we are only calling token_uri() call tokenURI() and uri() where necessary
+-   [ ] fix get_onchain_metadata to handle cairo strings properly
+-   [ ] Hold last synced block for tokens and indexer in db
+-   [ ] Go full sync and start listening for new blocks
+-   [ ] Add pause resume for indexer
 -   [ ] Go concurrent
+-   [ ] Write tests
 -   [ ] Cache contracts on high demand
 -   [ ] Document EVERYTHING
--   [ ] Add tracing
--   [ ] Add rest API
