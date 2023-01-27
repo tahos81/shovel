@@ -154,6 +154,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
 
 [[package]]
+name = "base64"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4a4ddaa51a5bc52a6948f74c06d20aaaddb71924eab79b8c97a8c556e942d6a"
+
+[[package]]
 name = "bigdecimal"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -207,7 +213,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "99d76085681585d39016f4d3841eb019201fc54d2dd0d92ad1e4fab3bfb32754"
 dependencies = [
  "ahash",
- "base64",
+ "base64 0.13.1",
  "hex",
  "indexmap",
  "lazy_static",
@@ -1158,7 +1164,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5a1df476ac9541b0e4fdc8e2cc48884e66c92c933cd17a1fd75e68caf75752e"
 dependencies = [
  "async-trait",
- "base64",
+ "base64 0.13.1",
  "bitflags",
  "bson",
  "chrono",
@@ -1572,7 +1578,7 @@ version = "0.11.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68cc60575865c7831548863cc02356512e3f1dc2f3f82cb837d7fc4cc8f3c97c"
 dependencies = [
- "base64",
+ "base64 0.13.1",
  "bytes",
  "encoding_rs",
  "futures-core",
@@ -1712,7 +1718,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ee86d63972a7c661d1536fefe8c3c8407321c3df668891286de28abcd087360"
 dependencies = [
- "base64",
+ "base64 0.13.1",
 ]
 
 [[package]]
@@ -1721,7 +1727,7 @@ version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0864aeff53f8c05aa08d86e5ef839d3dfcf07aeba2db32f12db0ef716e87bd55"
 dependencies = [
- "base64",
+ "base64 0.13.1",
 ]
 
 [[package]]
@@ -1952,6 +1958,7 @@ name = "shovel"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "base64 0.21.0",
  "color-eyre",
  "dotenv",
  "mongodb",
@@ -1962,6 +1969,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "url",
+ "urlencoding",
 ]
 
 [[package]]
@@ -2048,7 +2056,7 @@ name = "starknet-core"
 version = "0.2.0"
 source = "git+https://github.com/xJonathanLEI/starknet-rs#a6d864fb0b02a9b530283148047ab5027ce4d295"
 dependencies = [
- "base64",
+ "base64 0.13.1",
  "ethereum-types",
  "flate2",
  "hex",
@@ -2585,6 +2593,12 @@ dependencies = [
  "idna 0.3.0",
  "percent-encoding",
 ]
+
+[[package]]
+name = "urlencoding"
+version = "2.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8db7427f936968176eaa7cdf81b7f98b980b18495ec28f1b5791ac3bfe3eea9"
 
 [[package]]
 name = "uuid"

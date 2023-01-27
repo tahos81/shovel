@@ -5,6 +5,7 @@ pub mod token {
         types::CairoUint256,
     };
     use crate::db::document::{MetadataType, TokenMetadata};
+    use base64::{engine::general_purpose, Engine as _};
     use color_eyre::eyre::Result;
     use reqwest::Client;
     use starknet::{
@@ -16,6 +17,7 @@ pub mod token {
         },
     };
     use std::env;
+    use urlencoding;
 
     /// Gets the token URI for a given token ID
     pub async fn get_token_uri(
@@ -131,8 +133,20 @@ pub mod token {
 
     fn get_onchain_metadata(uri: &str) -> Result<TokenMetadata> {
         // Try to split from the comma as it is the standard with on chain metadata
+        let url_encoded = urlencoding::decode(uri).map(|s| String::from(s.as_ref()));
+        let uri_string = match url_encoded {
+            Ok(encoded) => encoded,
+            Err(_) => String::from(uri),
+        };
 
         match uri_string.split_once(',') {
+            Some(("data:application/json;base64", uri)) => {
+                // If it is base64 encoded, decode it, parse and return
+                let decoded = general_purpose::STANDARD.decode(uri)?;
+                let decoded = std::str::from_utf8(&decoded)?;
+                let metadata: TokenMetadata = serde_json::from_str(decoded)?;
+                Ok(metadata)
+            }
             Some(("data:application/json", uri)) => {
                 // If it is plain json, parse it and return
                 println!("Handling {:?}", uri);
