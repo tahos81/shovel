@@ -101,7 +101,7 @@ pub async fn handle_transfer(
                     recipient,
                     amount,
                 ))
-                .await;
+                .await?;
         }
     }
 
