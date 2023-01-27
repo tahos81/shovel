@@ -1,20 +1,23 @@
 pub mod token {
     use crate::common::{
-        cairo_types::CairoUint256,
         starknet_constants::{TOKEN_URI_SELECTOR, ZERO_FELT},
-        traits::AsciiExt,
+        traits::ToUtf8String,
+        types::CairoUint256,
     };
     use crate::db::document::{MetadataType, TokenMetadata};
+    use base64::{engine::general_purpose, Engine as _};
     use color_eyre::eyre::Result;
     use reqwest::Client;
     use starknet::{
         core::types::FieldElement,
+        macros::selector,
         providers::jsonrpc::{
             models::{BlockId, FunctionCall},
             HttpTransport, JsonRpcClient,
         },
     };
     use std::env;
+    use urlencoding;
 
     /// Gets the token URI for a given token ID
     pub async fn get_token_uri(
@@ -44,23 +47,53 @@ pub mod token {
         let is_felt_array = token_uri_response.len() > 1;
 
         if is_felt_array {
-            // Create a vector of bytes from the felt array, and for each felt in the array, filter out
-            // the 0's and append to the vector
-            let mut chars: Vec<u8> = vec![];
-            for felt in token_uri_response.iter().skip(1) {
-                let temp = felt.to_bytes_be();
-                for &v in &temp {
-                    if v != 0 {
-                        chars.push(v);
-                    }
-                }
-            }
-
-            // Convert the array to UTF8 string
-            String::from_utf8(chars).unwrap_or_default()
+            token_uri_response.to_utf8_string()
         } else {
-            // Convert the array to ASCII
-            token_uri_response.get(0).unwrap_or(&ZERO_FELT).to_ascii()
+            token_uri_response.get(0).unwrap_or(&ZERO_FELT).to_utf8_string()
+        }
+    }
+
+    pub async fn get_erc1155_uri(
+        address: FieldElement,
+        block_id: &BlockId,
+        rpc: &JsonRpcClient<HttpTransport>,
+        token_id: CairoUint256,
+    ) -> String {
+        let possible_selectors =
+            vec![selector!("uri"), selector!("tokenURI"), selector!("token_uri")];
+
+        let mut token_uri_response: Option<Vec<FieldElement>> = None;
+
+        for selector in possible_selectors {
+            println!("Trying selector: {}", selector.to_utf8_string());
+
+            let request = FunctionCall {
+                contract_address: address,
+                entry_point_selector: selector,
+                calldata: vec![token_id.low, token_id.high],
+            };
+            match rpc.call(request, block_id).await {
+                Ok(felt_array) => {
+                    token_uri_response = Some(felt_array);
+                    break;
+                }
+                Err(e) => {
+                    dbg!(e);
+                }
+            };
+        }
+
+        let token_uri_response = match token_uri_response {
+            Some(felt_array) => felt_array,
+            None => return String::new(),
+        };
+
+        let is_felt_array = token_uri_response.len() > 1;
+
+        if is_felt_array {
+            token_uri_response.to_utf8_string()
+        } else {
+            token_uri_response.get(0).unwrap_or(&ZERO_FELT).to_utf8_string()
         }
     }
 
@@ -98,8 +131,34 @@ pub mod token {
     }
 
     fn get_onchain_metadata(uri: &str) -> Result<TokenMetadata> {
-        let metadata: TokenMetadata = serde_json::from_str(uri)?;
-        Ok(metadata)
+        // Try to split from the comma as it is the standard with on chain metadata
+        let url_encoded = urlencoding::decode(uri).map(|s| String::from(s.as_ref()));
+        let uri_string = match url_encoded {
+            Ok(encoded) => encoded,
+            Err(_) => String::from(uri),
+        };
+
+        match uri_string.split_once(',') {
+            Some(("data:application/json;base64", uri)) => {
+                // If it is base64 encoded, decode it, parse and return
+                let decoded = general_purpose::STANDARD.decode(uri)?;
+                let decoded = std::str::from_utf8(&decoded)?;
+                let metadata: TokenMetadata = serde_json::from_str(decoded)?;
+                Ok(metadata)
+            }
+            Some(("data:application/json", uri)) => {
+                // If it is plain json, parse it and return
+                println!("Handling {:?}", uri);
+                let metadata: TokenMetadata = serde_json::from_str(uri)?;
+                Ok(metadata)
+            }
+            _ => match serde_json::from_str(uri) {
+                // If it is only the URI without the data format information, try to format it
+                // and if it fails, return empty metadata
+                Ok(v) => Ok(v),
+                Err(_) => Ok(TokenMetadata::EMPTY),
+            },
+        }
     }
 
     fn get_metadata_type(uri: &str) -> MetadataType {
@@ -115,7 +174,7 @@ pub mod token {
 
 pub mod contract {
     use crate::common::starknet_constants::{NAME_SELECTOR, SYMBOL_SELECTOR, ZERO_FELT};
-    use crate::common::traits::AsciiExt;
+    use crate::common::traits::ToUtf8String;
     use color_eyre::eyre::Result;
     use starknet::{
         core::types::FieldElement,
@@ -139,7 +198,7 @@ pub mod contract {
         let result = rpc.call(request, block_id).await.unwrap_or_default();
         let result = result.get(0).unwrap_or(&ZERO_FELT);
 
-        result.to_ascii()
+        result.to_utf8_string()
     }
 
     pub async fn get_symbol(
@@ -156,7 +215,7 @@ pub mod contract {
         let result = rpc.call(request, block_id).await.unwrap_or_default();
         let result = result.get(0).unwrap_or(&ZERO_FELT);
 
-        result.to_ascii()
+        result.to_utf8_string()
     }
 
     pub async fn is_erc721(
