@@ -10,6 +10,6 @@ pub async fn connect() -> Result<(Database, ClientSession), ConfigError> {
     let client_options = ClientOptions::parse(client_url_with_options).await?;
 
     let client = Client::with_options(client_options)?;
-    let mut session = client.start_session(None).await?;
+    let session = client.start_session(None).await?;
     Ok((client.database("shovel"), session))
 }
