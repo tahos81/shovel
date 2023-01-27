@@ -8,9 +8,9 @@ use starknet::{
 };
 
 pub struct Event<'a, 'b> {
-    pub event: &'b EmittedEvent,
-    pub rpc: &'a JsonRpcClient<HttpTransport>,
-    pub db: &'a Database,
+    event: &'b EmittedEvent,
+    rpc: &'a JsonRpcClient<HttpTransport>,
+    db: &'a Database,
 }
 
 impl<'a, 'b> Event<'a, 'b> {
@@ -26,7 +26,23 @@ impl<'a, 'b> Event<'a, 'b> {
         self.event.from_address
     }
 
-    pub fn block_id(&self) -> BlockId {
-        BlockId::Number(self.event.block_number)
+    pub fn block_id(&self) -> &BlockId {
+        &BlockId::Number(self.event.block_number)
+    }
+
+    pub fn block_number(&self) -> u64 {
+        self.event.block_number
+    }
+
+    pub fn data(&self) -> &Vec<FieldElement> {
+        &self.event.data
+    }
+
+    pub fn rpc(&self) -> &JsonRpcClient<HttpTransport> {
+        self.rpc
+    }
+
+    pub fn db(&self) -> &Database {
+        self.db
     }
 }
