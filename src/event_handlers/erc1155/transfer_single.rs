@@ -14,54 +14,55 @@ use crate::{
     },
 };
 use color_eyre::eyre::Result;
-use mongodb::{Collection, Database};
+use mongodb::Collection;
 use starknet::{
     core::types::FieldElement,
-    providers::jsonrpc::{models::EmittedEvent, HttpTransport, JsonRpcClient},
+    providers::jsonrpc::{models::BlockId, HttpTransport, JsonRpcClient},
 };
 
-pub async fn run(
-    event: &EmittedEvent,
-    rpc: &JsonRpcClient<HttpTransport>,
-    db: &Database,
-) -> Result<()> {
-    let sender = event.data[1];
-    let recipient = event.data[2];
-    let token_id = CairoUint256::new(event.data[3], event.data[4]);
-    let amount = CairoUint256::new(event.data[5], event.data[6]);
+pub async fn run(event_context: &Event<'_, '_>) -> Result<()> {
+    let contract_address = event_context.contract_address();
+    let block_id = event_context.block_id();
+    let event_data = event_context.data();
+    let db = event_context.db();
+    let rpc = event_context.rpc();
+
+    let sender = event_data[1];
+    let recipient = event_data[2];
+    let token_id = CairoUint256::new(event_data[3], event_data[4]);
+    let amount = CairoUint256::new(event_data[5], event_data[6]);
+
     let erc1155_collection = db.collection::<Erc1155Balance>("erc1155_tokens");
     let erc1155_metadata_collection = db.collection::<Erc1155Metadata>("erc1155_metadata");
     let contract_metadata_collection = db.collection::<ContractMetadata>("contract_metadata");
 
-    // Create the event context
-    let event_context = Event::new(event, rpc, db);
-
     handle_transfer(
+        contract_address,
+        &block_id,
         sender,
         recipient,
         token_id,
         amount,
+        rpc,
         &erc1155_collection,
         &erc1155_metadata_collection,
         &contract_metadata_collection,
-        &event_context,
     )
     .await
 }
 
 pub async fn handle_transfer(
+    contract_address: FieldElement,
+    block_id: &BlockId,
     sender: FieldElement,
     recipient: FieldElement,
     token_id: CairoUint256,
     amount: CairoUint256,
+    rpc: &JsonRpcClient<HttpTransport>,
     erc1155_collection: &Collection<Erc1155Balance>,
     erc1155_metadata_collection: &Collection<Erc1155Metadata>,
     contract_metadata_collection: &Collection<ContractMetadata>,
-    event_context: &Event<'_, '_>,
 ) -> Result<()> {
-    let contract_address = event_context.contract_address();
-    let block_id = event_context.block_id();
-
     // Update from balance
     if sender == FieldElement::ZERO {
         // Check if contract metadata exists
@@ -69,8 +70,8 @@ pub async fn handle_transfer(
             contract_metadata_collection.contract_metadata_exists(contract_address).await?;
 
         if !contract_metadata_exists {
-            let name = contract::get_name(contract_address, &block_id, event_context.rpc).await;
-            let symbol = contract::get_symbol(contract_address, &block_id, event_context.rpc).await;
+            let name = contract::get_name(contract_address, block_id, rpc).await;
+            let symbol = contract::get_symbol(contract_address, block_id, rpc).await;
             let contract_metadata = ContractMetadata::new(contract_address, name, symbol);
             contract_metadata_collection.insert_contract_metadata(contract_metadata).await?;
         }
@@ -80,9 +81,7 @@ pub async fn handle_transfer(
             erc1155_metadata_collection.erc1155_metadata_exists(contract_address, token_id).await?;
 
         if !token_metadata_exists {
-            let token_uri =
-                token::get_erc1155_uri(contract_address, &block_id, event_context.rpc, token_id)
-                    .await;
+            let token_uri = token::get_erc1155_uri(contract_address, block_id, rpc, token_id).await;
             let metadata = get_token_metadata(&token_uri).await?;
             let erc1155_metadata =
                 Erc1155Metadata::new(contract_address, token_id, token_uri, metadata);

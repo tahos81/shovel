@@ -1,4 +1,4 @@
-#![warn(clippy::all, clippy::pedantic, clippy::style)]
+#![warn(clippy::all, clippy::pedantic, clippy::style, rust_2018_idioms)]
 #![allow(clippy::unreadable_literal)]
 mod common;
 mod db;
@@ -8,7 +8,7 @@ mod rpc;
 use color_eyre::eyre::Result;
 use db::document::{ContractMetadata, Erc1155Balance, Erc1155Metadata, Erc721};
 use dotenv::dotenv;
-use mongodb::bson::doc;
+use mongodb::{bson::doc, Database};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -17,15 +17,10 @@ async fn main() -> Result<()> {
     let rpc = rpc::connect()?;
     let db = db::connect().await?;
 
-    // Drop all collections for test purposes
-    db.collection::<Erc721>("erc721_tokens").delete_many(doc! {}, None).await?;
-    db.collection::<Erc1155Balance>("erc1155_token_balances").delete_many(doc! {}, None).await?;
-    db.collection::<Erc1155Metadata>("erc1155_metadata").delete_many(doc! {}, None).await?;
-    db.collection::<ContractMetadata>("contract_metadata").delete_many(doc! {}, None).await?;
-    println!("dropped all collections");
+    drop_collections(&db).await?;
 
-    let mut start_block = 14020;
-    let range = 20;
+    let mut start_block = 14790;
+    let range = 10;
 
     while start_block < 16000 {
         println!("getting events between block {} and {}", start_block, start_block + range);
@@ -35,6 +30,17 @@ async fn main() -> Result<()> {
         println!("events handled");
         start_block += range;
     }
+
+    Ok(())
+}
+
+async fn drop_collections(db: &Database) -> Result<()> {
+    // Drop all collections for test purposes
+    db.collection::<Erc721>("erc721_tokens").delete_many(doc! {}, None).await?;
+    db.collection::<Erc1155Balance>("erc1155_token_balances").delete_many(doc! {}, None).await?;
+    db.collection::<Erc1155Metadata>("erc1155_metadata").delete_many(doc! {}, None).await?;
+    db.collection::<ContractMetadata>("contract_metadata").delete_many(doc! {}, None).await?;
+    println!("dropped all collections");
 
     Ok(())
 }

@@ -8,35 +8,62 @@ use crate::{
     rpc::metadata::{contract, token},
 };
 use color_eyre::eyre::Result;
+use mongodb::Collection;
+use starknet::{
+    core::types::FieldElement,
+    providers::jsonrpc::{models::BlockId, HttpTransport, JsonRpcClient},
+};
 
-pub async fn run(event_context: Event<'_, '_>) -> Result<()> {
-    let event_data = event_context.data();
-
-    let sender = event_data[0];
-    let recipient = event_data[1];
-
-    if sender == ZERO_FELT {
-        handle_mint(event_context).await
-    } else if recipient == ZERO_FELT {
-        handle_burn(event_context).await
-    } else {
-        handle_transfer(event_context).await
-    }
-}
-
-async fn handle_mint(event_context: Event<'_, '_>) -> Result<()> {
+pub async fn run(event_context: &Event<'_, '_>) -> Result<()> {
     let contract_address = event_context.contract_address();
     let block_id = event_context.block_id();
+    let block_number = event_context.block_number();
     let event_data = event_context.data();
     let db = event_context.db();
     let rpc = event_context.rpc();
 
+    let sender = event_data[0];
     let recipient = event_data[1];
     let token_id = CairoUint256::new(event_data[2], event_data[3]);
 
     let erc721_collection = db.collection::<Erc721>("erc721_tokens");
     let contract_metadata_collection = db.collection::<ContractMetadata>("contract_metadata");
 
+    if sender == ZERO_FELT {
+        handle_mint(
+            contract_address,
+            &block_id,
+            recipient,
+            token_id,
+            rpc,
+            &erc721_collection,
+            &contract_metadata_collection,
+        )
+        .await
+    } else if recipient == ZERO_FELT {
+        handle_burn(contract_address, block_number, sender, token_id, &erc721_collection).await
+    } else {
+        handle_transfer(
+            contract_address,
+            block_number,
+            sender,
+            recipient,
+            token_id,
+            &erc721_collection,
+        )
+        .await
+    }
+}
+
+async fn handle_mint(
+    contract_address: FieldElement,
+    block_id: &BlockId,
+    recipient: FieldElement,
+    token_id: CairoUint256,
+    rpc: &JsonRpcClient<HttpTransport>,
+    erc721_collection: &Collection<Erc721>,
+    contract_metadata_collection: &Collection<ContractMetadata>,
+) -> Result<()> {
     let token_uri = token::get_token_uri(contract_address, block_id, rpc, token_id).await;
     let metadata = token::get_token_metadata(&token_uri).await?;
     let erc721_token = Erc721::new(contract_address, token_id, recipient, token_uri, metadata);
@@ -56,35 +83,26 @@ async fn handle_mint(event_context: Event<'_, '_>) -> Result<()> {
     Ok(())
 }
 
-async fn handle_burn(event_context: Event<'_, '_>) -> Result<()> {
-    let contract_address = event_context.contract_address();
-    let block_number = event_context.block_number();
-    let event_data = event_context.data();
-    let db = event_context.db();
-
-    let sender = event_data[0];
-    let recipient = ZERO_FELT;
-    let token_id = CairoUint256::new(event_data[2], event_data[3]);
-
-    let erc721_collection = db.collection::<Erc721>("erc721_tokens");
-
+async fn handle_burn(
+    contract_address: FieldElement,
+    block_number: u64,
+    sender: FieldElement,
+    token_id: CairoUint256,
+    erc721_collection: &Collection<Erc721>,
+) -> Result<()> {
     erc721_collection
-        .update_erc721_owner(contract_address, token_id, sender, recipient, block_number)
+        .update_erc721_owner(contract_address, token_id, sender, ZERO_FELT, block_number)
         .await
 }
 
-async fn handle_transfer(event_context: Event<'_, '_>) -> Result<()> {
-    let contract_address = event_context.contract_address();
-    let block_number = event_context.block_number();
-    let event_data = event_context.data();
-    let db = event_context.db();
-
-    let sender = event_data[0];
-    let recipient = event_data[1];
-    let token_id = CairoUint256::new(event_data[2], event_data[3]);
-
-    let erc721_collection = db.collection::<Erc721>("erc721_tokens");
-
+async fn handle_transfer(
+    contract_address: FieldElement,
+    block_number: u64,
+    sender: FieldElement,
+    recipient: FieldElement,
+    token_id: CairoUint256,
+    erc721_collection: &Collection<Erc721>,
+) -> Result<()> {
     erc721_collection
         .update_erc721_owner(contract_address, token_id, sender, recipient, block_number)
         .await

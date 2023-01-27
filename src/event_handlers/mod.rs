@@ -37,20 +37,20 @@ pub async fn handle_transfer_events(
             // Both ERC20 and ERC721 use the same event key
             let is_erc721 = contract::is_erc721(
                 event_context.contract_address(),
-                event_context.block_id(),
+                &event_context.block_id(),
                 rpc,
             )
             .await?;
 
             if is_erc721 {
-                event_handlers::erc721::transfer::run(event_context).await?;
+                event_handlers::erc721::transfer::run(&event_context).await?;
             } else {
                 blacklist.insert(event_context.contract_address());
             }
         } else if keys.contains(&TRANSFER_SINGLE_EVENT_KEY) {
-            event_handlers::erc1155::transfer_single::run(event, rpc, db).await?;
+            event_handlers::erc1155::transfer_single::run(&event_context).await?;
         } else if keys.contains(&TRANSFER_BATCH_EVENT_KEY) {
-            event_handlers::erc1155::transfer_batch::run(event, rpc, db).await?;
+            event_handlers::erc1155::transfer_batch::run(&event_context).await?;
         }
     }
 

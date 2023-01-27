@@ -161,7 +161,7 @@ pub mod token {
         }
     }
 
-    fn get_metadata_type(uri: &str) -> MetadataType {
+    fn get_metadata_type(uri: &str) -> MetadataType<'_> {
         if uri.starts_with("ipfs://") {
             MetadataType::Ipfs(uri)
         } else if uri.starts_with("http://") || uri.starts_with("https://") {

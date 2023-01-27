@@ -26,8 +26,8 @@ impl<'a, 'b> Event<'a, 'b> {
         self.event.from_address
     }
 
-    pub fn block_id(&self) -> &BlockId {
-        &BlockId::Number(self.event.block_number)
+    pub fn block_id(&self) -> BlockId {
+        BlockId::Number(self.event.block_number)
     }
 
     pub fn block_number(&self) -> u64 {
