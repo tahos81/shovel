@@ -7,13 +7,13 @@ use starknet::{
     },
 };
 
-pub struct EventContext<'a, 'b> {
+pub struct Event<'a, 'b> {
     pub event: &'b EmittedEvent,
     pub rpc: &'a JsonRpcClient<HttpTransport>,
     pub db: &'a Database,
 }
 
-impl<'a, 'b> EventContext<'a, 'b> {
+impl<'a, 'b> Event<'a, 'b> {
     pub fn new(
         event: &'b EmittedEvent,
         rpc: &'a JsonRpcClient<HttpTransport>,
