@@ -1,4 +1,4 @@
-use crate::common::cairo_types::CairoUint256;
+use crate::common::types::CairoUint256;
 use mongodb::bson::doc;
 use serde::{self, Deserialize, Serialize};
 use starknet::core::types::FieldElement;
@@ -143,4 +143,18 @@ pub struct TokenMetadata {
     background_color: Option<String>,
     animation_url: Option<String>,
     youtube_url: Option<String>,
+}
+
+impl TokenMetadata {
+    pub const EMPTY: Self = Self {
+        name: None,
+        description: None,
+        image: None,
+        image_data: None,
+        external_url: None,
+        animation_url: None,
+        attributes: None,
+        background_color: None,
+        youtube_url: None,
+    };
 }

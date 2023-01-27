@@ -1,5 +1,5 @@
-use super::document::{ContractMetadata, Erc1155Balance, Erc721};
-use crate::common::cairo_types::CairoUint256;
+use super::document::{ContractMetadata, Erc1155Balance, Erc1155Metadata, Erc721};
+use crate::common::types::CairoUint256;
 use async_trait::async_trait;
 use color_eyre::eyre::Result;
 use mongodb::{bson::doc, options::UpdateOptions, Collection};
@@ -34,6 +34,16 @@ pub trait Erc1155CollectionInterface {
         token_id: CairoUint256,
         address: FieldElement,
     ) -> Result<Option<CairoUint256>>;
+}
+
+#[async_trait]
+pub trait Erc1155MetadataCollectionInterface {
+    async fn insert_erc1155_metadata(&self, erc1155_metadata: Erc1155Metadata) -> Result<()>;
+    async fn erc1155_metadata_exists(
+        &self,
+        contract_address: FieldElement,
+        token_id: CairoUint256,
+    ) -> Result<bool>;
 }
 
 #[async_trait]
@@ -89,7 +99,7 @@ impl Erc721CollectionInterface for Collection<Erc721> {
 #[async_trait]
 impl Erc1155CollectionInterface for Collection<Erc1155Balance> {
     async fn insert_erc1155_balance(&self, erc1155_balance: Erc1155Balance) -> Result<()> {
-        println!("Inserting erc1155");
+        println!("Inserting Erc1155");
         self.insert_one(erc1155_balance, None).await?;
         Ok(())
     }
@@ -145,6 +155,33 @@ impl Erc1155CollectionInterface for Collection<Erc1155Balance> {
             .await?
             .map(|response| response.balance);
         Ok(balance)
+    }
+}
+
+#[async_trait]
+impl Erc1155MetadataCollectionInterface for Collection<Erc1155Metadata> {
+    async fn insert_erc1155_metadata(&self, erc1155_metadata: Erc1155Metadata) -> Result<()> {
+        println!("Inserting Erc1155 metadata");
+        self.insert_one(erc1155_metadata, None).await?;
+        Ok(())
+    }
+
+    async fn erc1155_metadata_exists(
+        &self,
+        contract_address: FieldElement,
+        token_id: CairoUint256,
+    ) -> Result<bool> {
+        let query = doc! {
+            "_id": {
+                "contract_address": contract_address.to_string(),
+                "token_id": {
+                    "low": token_id.low.to_string(),
+                    "high": token_id.high.to_string()
+                },
+            }
+        };
+        let result = self.find_one(query, None).await?;
+        Ok(result.is_some())
     }
 }
 
