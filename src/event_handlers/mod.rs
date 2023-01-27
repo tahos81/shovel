@@ -19,14 +19,14 @@ pub mod context;
 mod erc1155;
 mod erc721;
 
-pub async fn process_events(
+pub async fn handle_transfer_events(
     events: Vec<EmittedEvent>,
     rpc: &JsonRpcClient<HttpTransport>,
     db: &Database,
 ) -> Result<()> {
     let mut blacklist: HashSet<FieldElement> = HashSet::new();
 
-    for event in events.iter() {
+    for event in &events {
         if blacklist.contains(&event.from_address) {
             continue;
         }

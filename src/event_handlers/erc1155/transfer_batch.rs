@@ -1,18 +1,17 @@
+use crate::{
+    common::types::CairoUint256,
+    db::document::{ContractMetadata, Erc1155Balance, Erc1155Metadata},
+    event_handlers::{context::Event, erc1155},
+};
+use color_eyre::eyre::Result;
 use mongodb::Database;
 use starknet::providers::jsonrpc::{models::EmittedEvent, HttpTransport, JsonRpcClient};
-use color_eyre::eyre::Result;
-use crate::{
-    common::cairo_types::CairoUint256,
-    db::document::{ContractMetadata, Erc1155Balance},
-    event_handlers::{context::EventContext, erc1155},
-};
 
 pub async fn run(
     event: &EmittedEvent,
     rpc: &JsonRpcClient<HttpTransport>,
     db: &Database,
 ) -> Result<()> {
-    let _operator = event.data[0];
     let sender = event.data[1];
     let recipient = event.data[2];
 
@@ -34,9 +33,10 @@ pub async fn run(
         );
 
     // Create the event context
-    let context = EventContext::new(event, rpc, db);
+    let event_context = Event::new(event, rpc, db);
 
     let erc1155_collection = db.collection::<Erc1155Balance>("erc1155_tokens");
+    let erc1155_metadata_collection = db.collection::<Erc1155Metadata>("erc1155_metadata");
     let contract_metadata_collection = db.collection::<ContractMetadata>("contract_metadata");
 
     // For each token_id - amount pair, process a single transfer
@@ -47,8 +47,9 @@ pub async fn run(
             token_id,
             amount,
             &erc1155_collection,
+            &erc1155_metadata_collection,
             &contract_metadata_collection,
-            &context,
+            &event_context,
         )
         .await?;
     }
