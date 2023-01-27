@@ -1,10 +1,10 @@
 use crate::{
-    common::cairo_types::CairoUint256,
+    common::types::CairoUint256,
     db::{
         collection::{ContractMetadataCollectionInterface, Erc721CollectionInterface},
         document::{ContractMetadata, Erc721},
     },
-    event_handlers::context::EventContext,
+    event_handlers::context::Event,
     rpc::metadata::{contract, token},
 };
 use color_eyre::eyre::Result;
@@ -24,19 +24,25 @@ pub async fn run(
     let token_id = CairoUint256::new(event.data[2], event.data[3]);
 
     // Create the event context
-    let context = EventContext::new(event, rpc, db);
+    let event_context = Event::new(event, rpc, db);
 
     let contract_metadata_collection =
-        context.db.collection::<ContractMetadata>("contract_metadata");
-    let erc721_collection = context.db.collection::<Erc721>("erc721_tokens");
+        event_context.db.collection::<ContractMetadata>("contract_metadata");
+    let erc721_collection = event_context.db.collection::<Erc721>("erc721_tokens");
 
     if sender == FieldElement::ZERO {
-        handle_mint(recipient, token_id, &erc721_collection, &contract_metadata_collection, context)
-            .await
+        handle_mint(
+            recipient,
+            token_id,
+            &erc721_collection,
+            &contract_metadata_collection,
+            event_context,
+        )
+        .await
     } else if recipient == FieldElement::ZERO {
-        handle_burn(sender, token_id, &erc721_collection, context).await
+        handle_burn(sender, token_id, &erc721_collection, event_context).await
     } else {
-        handle_transfer(sender, recipient, token_id, &erc721_collection, context).await
+        handle_transfer(sender, recipient, token_id, &erc721_collection, event_context).await
     }
 }
 
@@ -45,12 +51,13 @@ async fn handle_mint(
     token_id: CairoUint256,
     erc721_collection: &Collection<Erc721>,
     contract_metadata_collection: &Collection<ContractMetadata>,
-    context: EventContext<'_, '_>,
+    event_context: Event<'_, '_>,
 ) -> Result<()> {
-    let contract_address = context.contract_address();
-    let block_id = context.block_id();
+    let contract_address = event_context.contract_address();
+    let block_id = event_context.block_id();
 
-    let token_uri = token::get_token_uri(contract_address, &block_id, context.rpc, token_id).await;
+    let token_uri =
+        token::get_token_uri(contract_address, &block_id, event_context.rpc, token_id).await;
     let metadata = token::get_token_metadata(&token_uri).await?;
     let erc721_token = Erc721::new(contract_address, token_id, recipient, token_uri, metadata);
 
@@ -60,8 +67,8 @@ async fn handle_mint(
         contract_metadata_collection.contract_metadata_exists(contract_address).await?;
 
     if !metadata_exists {
-        let name = contract::get_name(contract_address, &block_id, context.rpc).await;
-        let symbol = contract::get_symbol(contract_address, &block_id, context.rpc).await;
+        let name = contract::get_name(contract_address, &block_id, event_context.rpc).await;
+        let symbol = contract::get_symbol(contract_address, &block_id, event_context.rpc).await;
         let contract_metadata = ContractMetadata::new(contract_address, name, symbol);
         contract_metadata_collection.insert_contract_metadata(contract_metadata).await?;
     }
@@ -73,7 +80,7 @@ async fn handle_burn(
     sender: FieldElement,
     token_id: CairoUint256,
     erc721_collection: &Collection<Erc721>,
-    context: EventContext<'_, '_>,
+    context: Event<'_, '_>,
 ) -> Result<()> {
     handle_transfer(sender, FieldElement::ZERO, token_id, erc721_collection, context).await
 }
@@ -83,10 +90,12 @@ async fn handle_transfer(
     recipient: FieldElement,
     token_id: CairoUint256,
     erc721_collection: &Collection<Erc721>,
-    context: EventContext<'_, '_>,
+    context: Event<'_, '_>,
 ) -> Result<()> {
     let contract_address = context.contract_address();
     let block_number = context.event.block_number;
 
-    todo!()
+    erc721_collection
+        .update_erc721_owner(contract_address, token_id, sender, recipient, block_number)
+        .await
 }
