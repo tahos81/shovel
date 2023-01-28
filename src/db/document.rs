@@ -1,6 +1,7 @@
 use crate::common::types::CairoUint256;
 use mongodb::bson::doc;
 use serde::{self, Deserialize, Serialize};
+use serde_json::Number;
 use starknet::core::types::FieldElement;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -119,10 +120,10 @@ enum DisplayType {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(untagged)]
 enum AttributeValue {
-    Int(i128),
-    Float(f64),
     String(String),
+    Number(Number),
 }
 
 #[derive(Debug, Deserialize, Serialize)]

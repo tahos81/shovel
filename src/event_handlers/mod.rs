@@ -1,3 +1,7 @@
+pub mod context;
+mod erc1155;
+mod erc721;
+
 use crate::{
     common::starknet_constants::{
         TRANSFER_BATCH_EVENT_KEY, TRANSFER_EVENT_KEY, TRANSFER_SINGLE_EVENT_KEY,
@@ -6,18 +10,13 @@ use crate::{
     rpc::metadata::contract,
 };
 use color_eyre::eyre::Result;
+use context::Event;
 use mongodb::Database;
 use starknet::{
     core::types::FieldElement,
-    providers::jsonrpc::{
-        models::{BlockId, EmittedEvent},
-        HttpTransport, JsonRpcClient,
-    },
+    providers::jsonrpc::{models::EmittedEvent, HttpTransport, JsonRpcClient},
 };
 use std::collections::HashSet;
-pub mod context;
-mod erc1155;
-mod erc721;
 
 pub async fn handle_transfer_events(
     events: Vec<EmittedEvent>,
@@ -31,23 +30,27 @@ pub async fn handle_transfer_events(
             continue;
         }
 
-        let contract_address = event.from_address;
-        let block_id = BlockId::Number(event.block_number);
+        let event_context = Event::new(event, rpc, db);
 
         let keys = &event.keys;
         if keys.contains(&TRANSFER_EVENT_KEY) {
             // Both ERC20 and ERC721 use the same event key
-            let is_erc721 = contract::is_erc721(contract_address, &block_id, rpc).await?;
+            let is_erc721 = contract::is_erc721(
+                event_context.contract_address(),
+                &event_context.block_id(),
+                rpc,
+            )
+            .await?;
 
             if is_erc721 {
-                event_handlers::erc721::transfer::run(event, rpc, db).await?;
+                event_handlers::erc721::transfer::run(&event_context).await?;
             } else {
-                blacklist.insert(contract_address);
+                blacklist.insert(event_context.contract_address());
             }
         } else if keys.contains(&TRANSFER_SINGLE_EVENT_KEY) {
-            event_handlers::erc1155::transfer_single::run(event, rpc, db).await?;
+            event_handlers::erc1155::transfer_single::run(&event_context).await?;
         } else if keys.contains(&TRANSFER_BATCH_EVENT_KEY) {
-            event_handlers::erc1155::transfer_batch::run(event, rpc, db).await?;
+            event_handlers::erc1155::transfer_batch::run(&event_context).await?;
         }
     }
 
