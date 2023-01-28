@@ -24,7 +24,7 @@ pub async fn run(event_context: &Event<'_, '_>) -> Result<()> {
 
     let sender = event_data[0];
     let recipient = event_data[1];
-    let token_id = CairoUint256::new(event_data[2], event_data[3]);
+    let token_id = CairoUint256::new(event_data[2], *event_data.get(3).unwrap_or(&ZERO_FELT));
 
     let erc721_collection = db.collection::<Erc721>("erc721_tokens");
     let contract_metadata_collection = db.collection::<ContractMetadata>("contract_metadata");
