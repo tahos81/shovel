@@ -4,8 +4,9 @@ use crate::{
     event_handlers::{context::Event, erc1155},
 };
 use color_eyre::eyre::Result;
+use mongodb::ClientSession;
 
-pub async fn run(event_context: &Event<'_, '_>) -> Result<()> {
+pub async fn run(event_context: &Event<'_, '_>, session: &mut ClientSession) -> Result<()> {
     let contract_address = event_context.contract_address();
     let block_id = event_context.block_id();
     let event_data = event_context.data();
@@ -48,6 +49,7 @@ pub async fn run(event_context: &Event<'_, '_>) -> Result<()> {
             &erc1155_collection,
             &erc1155_metadata_collection,
             &contract_metadata_collection,
+            session,
         )
         .await?;
     }

@@ -11,7 +11,7 @@ use crate::{
 };
 use color_eyre::eyre::Result;
 use context::Event;
-use mongodb::Database;
+use mongodb::{ClientSession, Database};
 use starknet::{
     core::types::FieldElement,
     providers::jsonrpc::{models::EmittedEvent, HttpTransport, JsonRpcClient},
@@ -22,6 +22,7 @@ pub async fn handle_transfer_events(
     events: Vec<EmittedEvent>,
     rpc: &JsonRpcClient<HttpTransport>,
     db: &Database,
+    session: &mut ClientSession,
 ) -> Result<()> {
     let mut blacklist: HashSet<FieldElement> = HashSet::new();
 
@@ -43,14 +44,14 @@ pub async fn handle_transfer_events(
             .await?;
 
             if is_erc721 {
-                event_handlers::erc721::transfer::run(&event_context).await?;
+                event_handlers::erc721::transfer::run(&event_context, session).await?;
             } else {
                 blacklist.insert(event_context.contract_address());
             }
         } else if keys.contains(&TRANSFER_SINGLE_EVENT_KEY) {
-            event_handlers::erc1155::transfer_single::run(&event_context).await?;
+            event_handlers::erc1155::transfer_single::run(&event_context, session).await?;
         } else if keys.contains(&TRANSFER_BATCH_EVENT_KEY) {
-            event_handlers::erc1155::transfer_batch::run(&event_context).await?;
+            event_handlers::erc1155::transfer_batch::run(&event_context, session).await?;
         }
     }
 
