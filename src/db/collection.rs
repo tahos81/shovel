@@ -181,7 +181,7 @@ impl Erc1155CollectionInterface for Collection<Erc1155Balance> {
                 session,
             )
             .await?
-            .map(|response| response.balance);
+            .map(|response| response.balance());
         Ok(balance)
     }
 }

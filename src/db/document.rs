@@ -5,16 +5,16 @@ use serde_json::Number;
 use starknet::core::types::FieldElement;
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct AddressAtBlock {
-    pub address: FieldElement,
-    pub block: u64,
+struct AddressAtBlock {
+    address: FieldElement,
+    block: u64,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ContractMetadata {
-    pub _id: FieldElement,
-    pub name: String,
-    pub symbol: String,
+    _id: FieldElement,
+    name: String,
+    symbol: String,
 }
 
 impl ContractMetadata {
@@ -24,18 +24,18 @@ impl ContractMetadata {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct Erc721Id {
+struct Erc721Id {
     pub contract_address: FieldElement,
     pub token_id: CairoUint256,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Erc721 {
-    pub _id: Erc721Id,
-    pub owner: FieldElement,
-    pub previous_owners: Vec<AddressAtBlock>,
-    pub token_uri: String,
-    pub metadata: TokenMetadata,
+    _id: Erc721Id,
+    owner: FieldElement,
+    previous_owners: Vec<AddressAtBlock>,
+    token_uri: String,
+    metadata: TokenMetadata,
 }
 
 impl Erc721 {
@@ -57,16 +57,16 @@ impl Erc721 {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct Erc1155MetadataId {
-    pub contract_address: FieldElement,
-    pub token_id: CairoUint256,
+struct Erc1155MetadataId {
+    contract_address: FieldElement,
+    token_id: CairoUint256,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Erc1155Metadata {
-    pub _id: Erc1155MetadataId,
-    pub token_uri: String,
-    pub metadata: TokenMetadata,
+    _id: Erc1155MetadataId,
+    token_uri: String,
+    metadata: TokenMetadata,
 }
 
 #[allow(unused)]
@@ -82,16 +82,16 @@ impl Erc1155Metadata {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct Erc1155BalanceId {
-    pub contract_address: FieldElement,
-    pub token_id: CairoUint256,
-    pub owner: FieldElement,
+struct Erc1155BalanceId {
+    contract_address: FieldElement,
+    token_id: CairoUint256,
+    owner: FieldElement,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Erc1155Balance {
-    pub _id: Erc1155BalanceId,
-    pub balance: CairoUint256,
+    _id: Erc1155BalanceId,
+    balance: CairoUint256,
 }
 
 impl Erc1155Balance {
@@ -102,6 +102,10 @@ impl Erc1155Balance {
         balance: CairoUint256,
     ) -> Self {
         Self { _id: Erc1155BalanceId { contract_address, token_id, owner }, balance }
+    }
+
+    pub fn balance(&self) -> CairoUint256 {
+        self.balance
     }
 }
 
