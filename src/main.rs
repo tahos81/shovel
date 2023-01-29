@@ -4,6 +4,7 @@ mod common;
 mod db;
 mod event_handlers;
 mod rpc;
+mod file_storage;
 
 use color_eyre::eyre::Result;
 use db::document::{ContractMetadata, Erc1155Balance, Erc1155Metadata, Erc721};
