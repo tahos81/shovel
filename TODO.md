@@ -3,7 +3,7 @@
 ---
 
 -   [ ] Amazon buckets integration for lazy image caching
--   [ ] Use transactions for DB operations
+-   [x] Use transactions for DB operations
 -   [x] Start inserting erc1155Metadata to db
 -   [x] we are only calling token_uri() call tokenURI() and uri() where necessary
 -   [x] fix get_onchain_metadata to handle cairo strings properly

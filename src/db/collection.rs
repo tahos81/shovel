@@ -90,7 +90,7 @@ impl Erc721CollectionInterface for Collection<Erc721> {
         block_number: u64,
         session: &mut ClientSession,
     ) -> Result<()> {
-        let query = doc! {"_id": {
+        let query = doc! {"erc721id": {
             "contract_address": contract_address.to_string(),
             "token_id": {
                 "low": token_id.low.to_string(),

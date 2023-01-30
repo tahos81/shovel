@@ -156,7 +156,7 @@ pub mod token {
                 // If it is only the URI without the data format information, try to format it
                 // and if it fails, return empty metadata
                 Ok(v) => Ok(v),
-                Err(_) => Ok(TokenMetadata::EMPTY),
+                Err(_) => Ok(TokenMetadata::default()),
             },
         }
     }

@@ -19,8 +19,8 @@ async fn main() -> Result<()> {
 
     drop_collections(&db).await?;
 
-    //first transfer event
-    let mut start_block = 1630;
+    //first transfer event is in 1630
+    let mut start_block = 1930;
     let range = 20;
 
     while start_block < 16000 {

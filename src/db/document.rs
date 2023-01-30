@@ -31,13 +31,19 @@ impl ContractMetadata {
 
 #[derive(Debug, Deserialize, Serialize)]
 struct Erc721Id {
-    pub contract_address: FieldElement,
-    pub token_id: CairoUint256,
+    contract_address: FieldElement,
+    token_id: CairoUint256,
+}
+
+impl Erc721Id {
+    pub fn new(contract_address: FieldElement, token_id: CairoUint256) -> Self {
+        Self { contract_address, token_id }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Erc721 {
-    _id: Erc721Id,
+    erc721id: Erc721Id,
     owner: FieldElement,
     previous_owners: Vec<AddressAtBlock>,
     token_uri: String,
@@ -55,7 +61,7 @@ impl Erc721 {
         last_updated: u64,
     ) -> Self {
         Self {
-            _id: Erc721Id { contract_address, token_id },
+            erc721id: Erc721Id::new(contract_address, token_id),
             owner,
             previous_owners: vec![],
             token_uri,
@@ -155,7 +161,7 @@ struct Attribute {
     value: AttributeValue,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct TokenMetadata {
     image: Option<String>,
     image_data: Option<String>,
@@ -166,18 +172,4 @@ pub struct TokenMetadata {
     background_color: Option<String>,
     animation_url: Option<String>,
     youtube_url: Option<String>,
-}
-
-impl TokenMetadata {
-    pub const EMPTY: Self = Self {
-        name: None,
-        description: None,
-        image: None,
-        image_data: None,
-        external_url: None,
-        animation_url: None,
-        attributes: None,
-        background_color: None,
-        youtube_url: None,
-    };
 }
