@@ -6,9 +6,8 @@ mod event_handlers;
 mod rpc;
 
 use color_eyre::eyre::Result;
-use db::document::{ContractMetadata, Erc1155Balance, Erc1155Metadata, Erc721};
 use dotenv::dotenv;
-use mongodb::{bson::doc, error::UNKNOWN_TRANSACTION_COMMIT_RESULT, Database};
+use mongodb::error::UNKNOWN_TRANSACTION_COMMIT_RESULT;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -17,11 +16,11 @@ async fn main() -> Result<()> {
     let rpc = rpc::connect()?;
     let (db, mut session) = db::connect().await?;
 
-    drop_collections(&db).await?;
+    db::drop_collections(&db).await?;
 
     //first transfer event is in 1630
-    let mut start_block = 1930;
-    let range = 20;
+    let mut start_block = db::last_synced_block(&db, &mut session).await.unwrap_or(1630);
+    let range = 30;
 
     while start_block < 16000 {
         session.start_transaction(None).await?;
@@ -29,9 +28,12 @@ async fn main() -> Result<()> {
         println!("getting events between block {} and {}", start_block, start_block + range);
         let transfer_events = rpc::get_transfer_events::run(start_block, range, &rpc).await?;
         println!("got {} events in total", transfer_events.len());
+
         event_handlers::handle_transfer_events(transfer_events, &rpc, &db, &mut session).await?;
         println!("events handled");
+
         start_block += range;
+        db::update_last_synced_block(&db, start_block, &mut session).await?;
 
         loop {
             let result = session.commit_transaction().await;
@@ -43,17 +45,6 @@ async fn main() -> Result<()> {
             break result?;
         }
     }
-
-    Ok(())
-}
-
-async fn drop_collections(db: &Database) -> Result<()> {
-    // Drop all collections for test purposes
-    db.collection::<Erc721>("erc721_tokens").delete_many(doc! {}, None).await?;
-    db.collection::<Erc1155Balance>("erc1155_tokens").delete_many(doc! {}, None).await?;
-    db.collection::<Erc1155Metadata>("erc1155_metadata").delete_many(doc! {}, None).await?;
-    db.collection::<ContractMetadata>("contract_metadata").delete_many(doc! {}, None).await?;
-    println!("dropped all collections");
 
     Ok(())
 }
