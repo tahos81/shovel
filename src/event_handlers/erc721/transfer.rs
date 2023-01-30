@@ -33,6 +33,7 @@ pub async fn run(event_context: &Event<'_, '_>, session: &mut ClientSession) -> 
         handle_mint(
             contract_address,
             &block_id,
+            block_number,
             recipient,
             token_id,
             rpc,
@@ -61,6 +62,7 @@ pub async fn run(event_context: &Event<'_, '_>, session: &mut ClientSession) -> 
 async fn handle_mint(
     contract_address: FieldElement,
     block_id: &BlockId,
+    block_number: u64,
     recipient: FieldElement,
     token_id: CairoUint256,
     rpc: &JsonRpcClient<HttpTransport>,
@@ -70,7 +72,8 @@ async fn handle_mint(
 ) -> Result<()> {
     let token_uri = token::get_token_uri(contract_address, block_id, rpc, token_id).await;
     let metadata = token::get_token_metadata(&token_uri).await?;
-    let erc721_token = Erc721::new(contract_address, token_id, recipient, token_uri, metadata);
+    let erc721_token =
+        Erc721::new(contract_address, token_id, recipient, token_uri, metadata, block_number);
 
     erc721_collection.insert_erc721(erc721_token, session).await?;
 
@@ -80,7 +83,7 @@ async fn handle_mint(
     if !metadata_exists {
         let name = contract::get_name(contract_address, block_id, rpc).await;
         let symbol = contract::get_symbol(contract_address, block_id, rpc).await;
-        let contract_metadata = ContractMetadata::new(contract_address, name, symbol);
+        let contract_metadata = ContractMetadata::new(contract_address, name, symbol, block_number);
         contract_metadata_collection.insert_contract_metadata(contract_metadata, session).await?;
     }
 

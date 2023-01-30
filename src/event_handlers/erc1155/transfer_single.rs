@@ -23,6 +23,7 @@ use starknet::{
 pub async fn run(event_context: &Event<'_, '_>, session: &mut ClientSession) -> Result<()> {
     let contract_address = event_context.contract_address();
     let block_id = event_context.block_id();
+    let block_number = event_context.block_number();
     let event_data = event_context.data();
     let db = event_context.db();
     let rpc = event_context.rpc();
@@ -39,6 +40,7 @@ pub async fn run(event_context: &Event<'_, '_>, session: &mut ClientSession) -> 
     handle_transfer(
         contract_address,
         &block_id,
+        block_number,
         sender,
         recipient,
         token_id,
@@ -55,6 +57,7 @@ pub async fn run(event_context: &Event<'_, '_>, session: &mut ClientSession) -> 
 pub async fn handle_transfer(
     contract_address: FieldElement,
     block_id: &BlockId,
+    block_number: u64,
     sender: FieldElement,
     recipient: FieldElement,
     token_id: CairoUint256,
@@ -75,7 +78,8 @@ pub async fn handle_transfer(
         if !contract_metadata_exists {
             let name = contract::get_name(contract_address, block_id, rpc).await;
             let symbol = contract::get_symbol(contract_address, block_id, rpc).await;
-            let contract_metadata = ContractMetadata::new(contract_address, name, symbol);
+            let contract_metadata =
+                ContractMetadata::new(contract_address, name, symbol, block_number);
             contract_metadata_collection
                 .insert_contract_metadata(contract_metadata, session)
                 .await?;
@@ -90,7 +94,7 @@ pub async fn handle_transfer(
             let token_uri = token::get_erc1155_uri(contract_address, block_id, rpc, token_id).await;
             let metadata = get_token_metadata(&token_uri).await?;
             let erc1155_metadata =
-                Erc1155Metadata::new(contract_address, token_id, token_uri, metadata);
+                Erc1155Metadata::new(contract_address, token_id, token_uri, metadata, block_number);
 
             erc1155_metadata_collection.insert_erc1155_metadata(erc1155_metadata, session).await?;
         }
@@ -108,7 +112,14 @@ pub async fn handle_transfer(
 
         let new_balance = from_balance - amount;
         erc1155_collection
-            .update_erc1155_balance(contract_address, token_id, sender, new_balance, session)
+            .update_erc1155_balance(
+                contract_address,
+                token_id,
+                sender,
+                new_balance,
+                block_number,
+                session,
+            )
             .await?;
     }
 
@@ -120,14 +131,21 @@ pub async fn handle_transfer(
         Some(previous_balance) => {
             let new_balance = previous_balance + amount;
             erc1155_collection
-                .update_erc1155_balance(contract_address, token_id, recipient, new_balance, session)
+                .update_erc1155_balance(
+                    contract_address,
+                    token_id,
+                    recipient,
+                    new_balance,
+                    block_number,
+                    session,
+                )
                 .await?;
         }
         None => {
             // Do insert
             erc1155_collection
                 .insert_erc1155_balance(
-                    Erc1155Balance::new(contract_address, token_id, sender, amount),
+                    Erc1155Balance::new(contract_address, token_id, sender, amount, block_number),
                     session,
                 )
                 .await?;

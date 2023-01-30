@@ -32,6 +32,7 @@ pub trait Erc1155CollectionInterface {
         token_id: CairoUint256,
         address: FieldElement,
         balance: CairoUint256,
+        block_number: u64,
         session: &mut ClientSession,
     ) -> Result<()>;
     async fn get_erc1155_balance(
@@ -99,7 +100,8 @@ impl Erc721CollectionInterface for Collection<Erc721> {
 
         let update = doc! {
             "$set": {
-            "owner": new_owner.to_string()
+            "owner": new_owner.to_string(),
+            "last_updated": block_number as i32
             },
             "$push": {
                 "previous_owners": {
@@ -135,6 +137,7 @@ impl Erc1155CollectionInterface for Collection<Erc1155Balance> {
         token_id: CairoUint256,
         address: FieldElement,
         balance: CairoUint256,
+        block_number: u64,
         session: &mut ClientSession,
     ) -> Result<()> {
         let query = doc! {"_id": {
@@ -151,7 +154,8 @@ impl Erc1155CollectionInterface for Collection<Erc1155Balance> {
                 "balance": {
                     "low": balance.low.to_string(),
                     "high": balance.high.to_string()
-                }
+                },
+                "last_updated": block_number as i32
             }
         };
 

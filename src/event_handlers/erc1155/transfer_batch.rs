@@ -9,6 +9,7 @@ use mongodb::ClientSession;
 pub async fn run(event_context: &Event<'_, '_>, session: &mut ClientSession) -> Result<()> {
     let contract_address = event_context.contract_address();
     let block_id = event_context.block_id();
+    let block_number = event_context.block_number();
     let event_data = event_context.data();
     let db = event_context.db();
     let rpc = event_context.rpc();
@@ -41,6 +42,7 @@ pub async fn run(event_context: &Event<'_, '_>, session: &mut ClientSession) -> 
         erc1155::transfer_single::handle_transfer(
             contract_address,
             &block_id,
+            block_number,
             sender,
             recipient,
             token_id,

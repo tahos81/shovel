@@ -15,11 +15,17 @@ pub struct ContractMetadata {
     _id: FieldElement,
     name: String,
     symbol: String,
+    last_updated: u64,
 }
 
 impl ContractMetadata {
-    pub fn new(contract_address: FieldElement, name: String, symbol: String) -> Self {
-        Self { _id: contract_address, name, symbol }
+    pub fn new(
+        contract_address: FieldElement,
+        name: String,
+        symbol: String,
+        last_updated: u64,
+    ) -> Self {
+        Self { _id: contract_address, name, symbol, last_updated }
     }
 }
 
@@ -36,6 +42,7 @@ pub struct Erc721 {
     previous_owners: Vec<AddressAtBlock>,
     token_uri: String,
     metadata: TokenMetadata,
+    last_updated: u64,
 }
 
 impl Erc721 {
@@ -45,6 +52,7 @@ impl Erc721 {
         owner: FieldElement,
         token_uri: String,
         metadata: TokenMetadata,
+        last_updated: u64,
     ) -> Self {
         Self {
             _id: Erc721Id { contract_address, token_id },
@@ -52,6 +60,7 @@ impl Erc721 {
             previous_owners: vec![],
             token_uri,
             metadata,
+            last_updated,
         }
     }
 }
@@ -67,6 +76,7 @@ pub struct Erc1155Metadata {
     _id: Erc1155MetadataId,
     token_uri: String,
     metadata: TokenMetadata,
+    last_updated: u64,
 }
 
 #[allow(unused)]
@@ -76,8 +86,14 @@ impl Erc1155Metadata {
         token_id: CairoUint256,
         token_uri: String,
         metadata: TokenMetadata,
+        last_updated: u64,
     ) -> Self {
-        Self { _id: Erc1155MetadataId { contract_address, token_id }, token_uri, metadata }
+        Self {
+            _id: Erc1155MetadataId { contract_address, token_id },
+            token_uri,
+            metadata,
+            last_updated,
+        }
     }
 }
 
@@ -92,6 +108,7 @@ struct Erc1155BalanceId {
 pub struct Erc1155Balance {
     _id: Erc1155BalanceId,
     balance: CairoUint256,
+    last_updated: u64,
 }
 
 impl Erc1155Balance {
@@ -100,8 +117,9 @@ impl Erc1155Balance {
         token_id: CairoUint256,
         owner: FieldElement,
         balance: CairoUint256,
+        last_updated: u64,
     ) -> Self {
-        Self { _id: Erc1155BalanceId { contract_address, token_id, owner }, balance }
+        Self { _id: Erc1155BalanceId { contract_address, token_id, owner }, balance, last_updated }
     }
 
     pub fn balance(&self) -> CairoUint256 {
