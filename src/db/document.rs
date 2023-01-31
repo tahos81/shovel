@@ -112,7 +112,7 @@ pub enum MetadataType<'a> {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-enum DisplayType {
+pub enum DisplayType {
     Number,
     BoostPercentage,
     BoostNumber,
@@ -121,29 +121,29 @@ enum DisplayType {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(untagged)]
-enum AttributeValue {
+pub enum AttributeValue {
     String(String),
     Number(Number),
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-struct Attribute {
-    display_type: Option<DisplayType>,
-    trait_type: Option<String>,
-    value: AttributeValue,
+pub struct Attribute {
+    pub display_type: Option<DisplayType>,
+    pub trait_type: Option<String>,
+    pub value: AttributeValue,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct TokenMetadata {
-    image: Option<String>,
-    image_data: Option<String>,
-    external_url: Option<String>,
-    description: Option<String>,
-    name: Option<String>,
-    attributes: Option<Vec<Attribute>>,
-    background_color: Option<String>,
-    animation_url: Option<String>,
-    youtube_url: Option<String>,
+    pub image: Option<String>,
+    pub image_data: Option<String>,
+    pub external_url: Option<String>,
+    pub description: Option<String>,
+    pub name: Option<String>,
+    pub attributes: Option<Vec<Attribute>>,
+    pub background_color: Option<String>,
+    pub animation_url: Option<String>,
+    pub youtube_url: Option<String>,
 }
 
 impl TokenMetadata {
