@@ -20,7 +20,7 @@ pub mod token {
     use urlencoding;
 
     /// Gets the token URI for a given token ID
-    pub async fn get_token_uri(
+    pub async fn get_erc721_uri(
         address: FieldElement,
         block_id: &BlockId,
         rpc: &JsonRpcClient<HttpTransport>,

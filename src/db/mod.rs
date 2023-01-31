@@ -2,7 +2,7 @@ pub mod collection;
 pub mod document;
 
 use crate::common::errors::ConfigError;
-use document::{ContractMetadata, Erc1155Balance, Erc1155Metadata, Erc721};
+use document::{ContractMetadata, Erc1155Balance, Erc1155Metadata, Erc721, IndexerMetadata};
 use mongodb::{
     bson::doc,
     options::{ClientOptions, UpdateOptions},
@@ -19,10 +19,11 @@ pub async fn connect() -> Result<(Database, ClientSession), ConfigError> {
     Ok((client.database("shovel"), session))
 }
 
-pub async fn last_synced_block(db: &Database, session: &mut ClientSession) -> Option<u64> {
-    let commons: Collection<u64> = db.collection("common");
+pub async fn last_synced_block(db: &Database, session: &mut ClientSession) -> u64 {
+    let commons: Collection<IndexerMetadata> = db.collection("indexer_metadata");
 
-    commons.find_one_with_session(None, None, session).await.unwrap_or(None)
+    let res = commons.find_one_with_session(doc! {}, None, session).await.unwrap_or(None);
+    res.unwrap_or_default().last_sync()
 }
 
 pub async fn update_last_synced_block(
@@ -30,7 +31,7 @@ pub async fn update_last_synced_block(
     last_sync: u64,
     session: &mut ClientSession,
 ) -> color_eyre::eyre::Result<()> {
-    let commons: Collection<u64> = db.collection("common");
+    let commons: Collection<u64> = db.collection("indexer_metadata");
 
     let update = doc! {
         "$set": {"last_sync": last_sync as i64}

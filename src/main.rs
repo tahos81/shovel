@@ -19,7 +19,7 @@ async fn main() -> Result<()> {
     db::drop_collections(&db).await?;
 
     //first transfer event is in 1630
-    let mut start_block = db::last_synced_block(&db, &mut session).await.unwrap_or(1630);
+    let mut start_block = db::last_synced_block(&db, &mut session).await;
     let range = 30;
 
     while start_block < 16000 {

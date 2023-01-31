@@ -70,17 +70,17 @@ async fn handle_mint(
     contract_metadata_collection: &Collection<ContractMetadata>,
     session: &mut ClientSession,
 ) -> Result<()> {
-    let token_uri = token::get_token_uri(contract_address, block_id, rpc, token_id).await;
+    let token_uri = token::get_erc721_uri(contract_address, block_id, rpc, token_id).await;
     let metadata = token::get_token_metadata(&token_uri).await?;
     let erc721_token =
         Erc721::new(contract_address, token_id, recipient, token_uri, metadata, block_number);
 
     erc721_collection.insert_erc721(erc721_token, session).await?;
 
-    let metadata_exists =
+    let contract_metadata_exists =
         contract_metadata_collection.contract_metadata_exists(contract_address, session).await?;
 
-    if !metadata_exists {
+    if !contract_metadata_exists {
         let name = contract::get_name(contract_address, block_id, rpc).await;
         let symbol = contract::get_symbol(contract_address, block_id, rpc).await;
         let contract_metadata = ContractMetadata::new(contract_address, name, symbol, block_number);

@@ -85,7 +85,6 @@ pub struct Erc1155Metadata {
     last_updated: u64,
 }
 
-#[allow(unused)]
 impl Erc1155Metadata {
     pub fn new(
         contract_address: FieldElement,
@@ -172,4 +171,21 @@ pub struct TokenMetadata {
     background_color: Option<String>,
     animation_url: Option<String>,
     youtube_url: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct IndexerMetadata {
+    last_sync: u64,
+}
+
+impl IndexerMetadata {
+    pub fn last_sync(&self) -> u64 {
+        self.last_sync
+    }
+}
+
+impl Default for IndexerMetadata {
+    fn default() -> Self {
+        Self { last_sync: 1630 }
+    }
 }
