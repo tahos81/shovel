@@ -1,8 +1,6 @@
 use std::str::FromStr;
 
 use crate::db::document::TokenMetadata;
-use aws_sdk_s3::input::PutBucketOwnershipControlsInput;
-use color_eyre::eyre::{private::kind::TraitKind, Result};
 
 use super::{s3::AwsS3Storage, svg_to_png::svg_to_png};
 
