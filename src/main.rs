@@ -4,6 +4,7 @@ mod common;
 mod db;
 mod event_handlers;
 mod rpc;
+mod file_storage;
 
 use color_eyre::eyre::Result;
 use dotenv::dotenv;
