@@ -28,7 +28,13 @@ impl AwsS3Storage {
 
     #[allow(unused)]
     /// Uploads a bytes vector to given bucket and key
-    pub async fn upload(&self, bucket_name: &str, key: &str, content_type: &str, bytes: Vec<u8>) -> Result<String> {
+    pub async fn upload(
+        &self,
+        bucket_name: &str,
+        key: &str,
+        content_type: &str,
+        bytes: Vec<u8>,
+    ) -> Result<String> {
         let file_size = bytes.len();
 
         ensure!(file_size != 0, UploadError::BadSize());

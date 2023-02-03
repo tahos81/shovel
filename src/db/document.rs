@@ -151,6 +151,10 @@ pub enum DisplayType {
 pub enum AttributeValue {
     String(String),
     Number(Number),
+    Bool(bool),
+    StringVec(Vec<String>),
+    NumberVec(Vec<Number>),
+    BoolVec(Vec<bool>),
 }
 
 #[derive(Debug, Deserialize, Serialize)]
