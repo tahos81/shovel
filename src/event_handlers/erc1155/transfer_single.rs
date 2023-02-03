@@ -5,7 +5,7 @@ use crate::{
             ContractMetadataCollectionInterface, Erc1155CollectionInterface,
             Erc1155MetadataCollectionInterface,
         },
-        document::{ContractMetadata, Erc1155Balance, Erc1155Metadata},
+        document::{ContractMetadata, Erc1155Balance, Erc1155Metadata, TokenMetadata},
     },
     event_handlers::context::Event,
     rpc::metadata::{
@@ -92,7 +92,12 @@ pub async fn handle_transfer(
 
         if !token_metadata_exists {
             let token_uri = token::get_erc1155_uri(contract_address, block_id, rpc, token_id).await;
-            let metadata = get_token_metadata(&token_uri).await?;
+            let metadata_result = get_token_metadata(&token_uri).await;
+            let metadata = match metadata_result {
+                Ok(metadata) => metadata,
+                Err(_) => TokenMetadata::default(),
+            };
+
             let erc1155_metadata =
                 Erc1155Metadata::new(contract_address, token_id, token_uri, metadata, block_number);
 

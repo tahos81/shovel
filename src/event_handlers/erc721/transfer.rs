@@ -2,7 +2,7 @@ use crate::{
     common::{starknet_constants::ZERO_FELT, types::CairoUint256},
     db::{
         collection::{ContractMetadataCollectionInterface, Erc721CollectionInterface},
-        document::{ContractMetadata, Erc721},
+        document::{ContractMetadata, Erc721, TokenMetadata},
     },
     event_handlers::context::Event,
     rpc::metadata::{contract, token},
@@ -71,7 +71,12 @@ async fn handle_mint(
     session: &mut ClientSession,
 ) -> Result<()> {
     let token_uri = token::get_erc721_uri(contract_address, block_id, rpc, token_id).await;
-    let metadata = token::get_token_metadata(&token_uri).await?;
+    let metadata_result = token::get_token_metadata(&token_uri).await;
+    let metadata = match metadata_result {
+        Ok(metadata) => metadata,
+        Err(_) => TokenMetadata::default(),
+    };
+
     let erc721_token =
         Erc721::new(contract_address, token_id, recipient, token_uri, metadata, block_number);
 
