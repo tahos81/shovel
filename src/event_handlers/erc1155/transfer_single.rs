@@ -106,7 +106,6 @@ pub async fn handle_transfer(
         {
             balance
         } else {
-            println!("Impossible state, from balance 0, using amount as default");
             amount
         };
 

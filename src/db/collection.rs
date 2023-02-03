@@ -76,7 +76,7 @@ pub trait ContractMetadataCollectionInterface {
 #[async_trait]
 impl Erc721CollectionInterface for Collection<Erc721> {
     async fn insert_erc721(&self, erc721: Erc721, session: &mut ClientSession) -> Result<()> {
-        println!("Inserting erc721");
+        log::info!("Inserting erc721");
         self.insert_one_with_session(erc721, None, session).await?;
         Ok(())
     }
@@ -112,7 +112,7 @@ impl Erc721CollectionInterface for Collection<Erc721> {
         };
 
         let options = UpdateOptions::builder().upsert(true).build();
-        println!("Updating erc721 owner");
+        log::info!("Updating erc721 owner");
 
         self.update_one_with_session(query, update, options, session).await?;
         Ok(())
@@ -126,7 +126,7 @@ impl Erc1155CollectionInterface for Collection<Erc1155Balance> {
         erc1155_balance: Erc1155Balance,
         session: &mut ClientSession,
     ) -> Result<()> {
-        println!("Inserting Erc1155");
+        log::info!("Inserting Erc1155 balance");
         self.insert_one_with_session(erc1155_balance, None, session).await?;
         Ok(())
     }
@@ -160,7 +160,7 @@ impl Erc1155CollectionInterface for Collection<Erc1155Balance> {
         };
 
         let options = UpdateOptions::builder().upsert(true).build();
-        println!("Updating erc1155 balance");
+        log::info!("Updating erc1155 balance");
 
         self.update_one_with_session(query, update, options.clone(), session).await?;
         Ok(())
@@ -197,7 +197,7 @@ impl Erc1155MetadataCollectionInterface for Collection<Erc1155Metadata> {
         erc1155_metadata: Erc1155Metadata,
         session: &mut ClientSession,
     ) -> Result<()> {
-        println!("Inserting Erc1155 metadata");
+        log::info!("Inserting Erc1155 metadata");
         self.insert_one_with_session(erc1155_metadata, None, session).await?;
         Ok(())
     }
@@ -229,7 +229,7 @@ impl ContractMetadataCollectionInterface for Collection<ContractMetadata> {
         contract: ContractMetadata,
         session: &mut ClientSession,
     ) -> Result<()> {
-        println!("Inserting contract");
+        log::info!("Inserting contract metadata");
         self.insert_one_with_session(contract, None, session).await?;
         Ok(())
     }

@@ -5,13 +5,24 @@ mod db;
 mod event_handlers;
 mod rpc;
 
+use clap::Parser;
+use clap_verbosity_flag::Verbosity;
 use color_eyre::eyre::Result;
 use dotenv::dotenv;
 use mongodb::error::UNKNOWN_TRANSACTION_COMMIT_RESULT;
 
+#[derive(Debug, Parser)]
+struct Cli {
+    #[clap(flatten)]
+    pub verbose: Verbosity,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenv().ok();
+    let cli = Cli::parse();
+
+    env_logger::Builder::new().filter_level(cli.verbose.log_level_filter()).init();
 
     let rpc = rpc::connect()?;
     let (db, mut session) = db::connect().await?;
@@ -25,12 +36,11 @@ async fn main() -> Result<()> {
     while start_block < 16000 {
         session.start_transaction(None).await?;
 
-        println!("getting events between block {} and {}", start_block, start_block + range);
+        log::info!("getting events between block {} and {}", start_block, start_block + range);
         let transfer_events = rpc::get_transfer_events::run(start_block, range, &rpc).await?;
-        println!("got {} events in total", transfer_events.len());
+        log::info!("got {} events in total", transfer_events.len());
 
         event_handlers::handle_transfer_events(transfer_events, &rpc, &db, &mut session).await?;
-        println!("events handled");
 
         start_block += range;
         db::update_last_synced_block(&db, start_block, &mut session).await?;
@@ -44,6 +54,7 @@ async fn main() -> Result<()> {
             }
             break result?;
         }
+        log::info!("committed transaction");
     }
 
     Ok(())

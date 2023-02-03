@@ -49,7 +49,7 @@ pub async fn drop_collections(db: &Database) -> color_eyre::eyre::Result<()> {
     db.collection::<Erc1155Balance>("erc1155_tokens").delete_many(doc! {}, None).await?;
     db.collection::<Erc1155Metadata>("erc1155_metadata").delete_many(doc! {}, None).await?;
     db.collection::<ContractMetadata>("contract_metadata").delete_many(doc! {}, None).await?;
-    println!("dropped all collections");
+    log::info!("dropped all collections");
 
     Ok(())
 }
