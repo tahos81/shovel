@@ -28,7 +28,7 @@ impl AwsS3Storage {
 
     #[allow(unused)]
     /// Uploads a bytes vector to given bucket and key
-    pub async fn upload(&self, bucket_name: &str, key: &str, bytes: Vec<u8>) -> Result<String> {
+    pub async fn upload(&self, bucket_name: &str, key: &str, content_type: &str, bytes: Vec<u8>) -> Result<String> {
         let file_size = bytes.len();
 
         ensure!(file_size != 0, UploadError::BadSize());
@@ -43,6 +43,7 @@ impl AwsS3Storage {
             .bucket(bucket_name)
             .key(key)
             .body(body)
+            .content_type(content_type)
             .send()
             .await
             .map(|_| self.get_url(bucket_name, key))?;
@@ -56,4 +57,8 @@ impl AwsS3Storage {
         self.client.delete_object().bucket(bucket_name).key(key).send().await?;
         Ok(())
     }
+}
+
+pub async fn connect() -> AwsS3Storage {
+    AwsS3Storage::new().await
 }
