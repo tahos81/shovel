@@ -8,13 +8,13 @@ use crate::{
     rpc::metadata::{contract, token},
 };
 use color_eyre::eyre::Result;
-use mongodb::Collection;
+use mongodb::{ClientSession, Collection};
 use starknet::{
     core::types::FieldElement,
     providers::jsonrpc::{models::BlockId, HttpTransport, JsonRpcClient},
 };
 
-pub async fn run(event_context: &Event<'_, '_>) -> Result<()> {
+pub async fn run(event_context: &Event<'_, '_>, session: &mut ClientSession) -> Result<()> {
     let contract_address = event_context.contract_address();
     let block_id = event_context.block_id();
     let block_number = event_context.block_number();
@@ -33,15 +33,18 @@ pub async fn run(event_context: &Event<'_, '_>) -> Result<()> {
         handle_mint(
             contract_address,
             &block_id,
+            block_number,
             recipient,
             token_id,
             rpc,
             &erc721_collection,
             &contract_metadata_collection,
+            session,
         )
         .await
     } else if recipient == ZERO_FELT {
-        handle_burn(contract_address, block_number, sender, token_id, &erc721_collection).await
+        handle_burn(contract_address, block_number, sender, token_id, &erc721_collection, session)
+            .await
     } else {
         handle_transfer(
             contract_address,
@@ -50,6 +53,7 @@ pub async fn run(event_context: &Event<'_, '_>) -> Result<()> {
             recipient,
             token_id,
             &erc721_collection,
+            session,
         )
         .await
     }
@@ -58,26 +62,29 @@ pub async fn run(event_context: &Event<'_, '_>) -> Result<()> {
 async fn handle_mint(
     contract_address: FieldElement,
     block_id: &BlockId,
+    block_number: u64,
     recipient: FieldElement,
     token_id: CairoUint256,
     rpc: &JsonRpcClient<HttpTransport>,
     erc721_collection: &Collection<Erc721>,
     contract_metadata_collection: &Collection<ContractMetadata>,
+    session: &mut ClientSession,
 ) -> Result<()> {
-    let token_uri = token::get_token_uri(contract_address, block_id, rpc, token_id).await;
+    let token_uri = token::get_erc721_uri(contract_address, block_id, rpc, token_id).await;
     let metadata = token::get_token_metadata(&token_uri).await?;
-    let erc721_token = Erc721::new(contract_address, token_id, recipient, token_uri, metadata);
+    let erc721_token =
+        Erc721::new(contract_address, token_id, recipient, token_uri, metadata, block_number);
 
-    erc721_collection.insert_erc721(erc721_token).await?;
+    erc721_collection.insert_erc721(erc721_token, session).await?;
 
-    let metadata_exists =
-        contract_metadata_collection.contract_metadata_exists(contract_address).await?;
+    let contract_metadata_exists =
+        contract_metadata_collection.contract_metadata_exists(contract_address, session).await?;
 
-    if !metadata_exists {
+    if !contract_metadata_exists {
         let name = contract::get_name(contract_address, block_id, rpc).await;
         let symbol = contract::get_symbol(contract_address, block_id, rpc).await;
-        let contract_metadata = ContractMetadata::new(contract_address, name, symbol);
-        contract_metadata_collection.insert_contract_metadata(contract_metadata).await?;
+        let contract_metadata = ContractMetadata::new(contract_address, name, symbol, block_number);
+        contract_metadata_collection.insert_contract_metadata(contract_metadata, session).await?;
     }
 
     Ok(())
@@ -89,9 +96,10 @@ async fn handle_burn(
     sender: FieldElement,
     token_id: CairoUint256,
     erc721_collection: &Collection<Erc721>,
+    session: &mut ClientSession,
 ) -> Result<()> {
     erc721_collection
-        .update_erc721_owner(contract_address, token_id, sender, ZERO_FELT, block_number)
+        .update_erc721_owner(contract_address, token_id, sender, ZERO_FELT, block_number, session)
         .await
 }
 
@@ -102,8 +110,9 @@ async fn handle_transfer(
     recipient: FieldElement,
     token_id: CairoUint256,
     erc721_collection: &Collection<Erc721>,
+    session: &mut ClientSession,
 ) -> Result<()> {
     erc721_collection
-        .update_erc721_owner(contract_address, token_id, sender, recipient, block_number)
+        .update_erc721_owner(contract_address, token_id, sender, recipient, block_number, session)
         .await
 }

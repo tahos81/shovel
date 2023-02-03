@@ -5,37 +5,50 @@ use serde_json::Number;
 use starknet::core::types::FieldElement;
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct AddressAtBlock {
-    pub address: FieldElement,
-    pub block: u64,
+struct AddressAtBlock {
+    address: FieldElement,
+    block: u64,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ContractMetadata {
-    pub _id: FieldElement,
-    pub name: String,
-    pub symbol: String,
+    _id: FieldElement,
+    name: String,
+    symbol: String,
+    last_updated: u64,
 }
 
 impl ContractMetadata {
-    pub fn new(contract_address: FieldElement, name: String, symbol: String) -> Self {
-        Self { _id: contract_address, name, symbol }
+    pub fn new(
+        contract_address: FieldElement,
+        name: String,
+        symbol: String,
+        last_updated: u64,
+    ) -> Self {
+        Self { _id: contract_address, name, symbol, last_updated }
     }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct Erc721Id {
-    pub contract_address: FieldElement,
-    pub token_id: CairoUint256,
+struct Erc721Id {
+    contract_address: FieldElement,
+    token_id: CairoUint256,
+}
+
+impl Erc721Id {
+    pub fn new(contract_address: FieldElement, token_id: CairoUint256) -> Self {
+        Self { contract_address, token_id }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Erc721 {
-    pub _id: Erc721Id,
-    pub owner: FieldElement,
-    pub previous_owners: Vec<AddressAtBlock>,
-    pub token_uri: String,
-    pub metadata: TokenMetadata,
+    erc721id: Erc721Id,
+    owner: FieldElement,
+    previous_owners: Vec<AddressAtBlock>,
+    token_uri: String,
+    metadata: TokenMetadata,
+    last_updated: u64,
 }
 
 impl Erc721 {
@@ -45,53 +58,62 @@ impl Erc721 {
         owner: FieldElement,
         token_uri: String,
         metadata: TokenMetadata,
+        last_updated: u64,
     ) -> Self {
         Self {
-            _id: Erc721Id { contract_address, token_id },
+            erc721id: Erc721Id::new(contract_address, token_id),
             owner,
             previous_owners: vec![],
             token_uri,
             metadata,
+            last_updated,
         }
     }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct Erc1155MetadataId {
-    pub contract_address: FieldElement,
-    pub token_id: CairoUint256,
+struct Erc1155MetadataId {
+    contract_address: FieldElement,
+    token_id: CairoUint256,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Erc1155Metadata {
-    pub _id: Erc1155MetadataId,
-    pub token_uri: String,
-    pub metadata: TokenMetadata,
+    _id: Erc1155MetadataId,
+    token_uri: String,
+    metadata: TokenMetadata,
+    last_updated: u64,
 }
 
-#[allow(unused)]
 impl Erc1155Metadata {
     pub fn new(
         contract_address: FieldElement,
         token_id: CairoUint256,
         token_uri: String,
         metadata: TokenMetadata,
+        last_updated: u64,
     ) -> Self {
-        Self { _id: Erc1155MetadataId { contract_address, token_id }, token_uri, metadata }
+        Self {
+            _id: Erc1155MetadataId { contract_address, token_id },
+            token_uri,
+            metadata,
+            last_updated,
+        }
     }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct Erc1155BalanceId {
-    pub contract_address: FieldElement,
-    pub token_id: CairoUint256,
-    pub owner: FieldElement,
+struct Erc1155BalanceId {
+    contract_address: FieldElement,
+    token_id: CairoUint256,
+    owner: FieldElement,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Erc1155Balance {
-    pub _id: Erc1155BalanceId,
-    pub balance: CairoUint256,
+    _id: Erc1155BalanceId,
+    balance: CairoUint256,
+    last_updated: u64,
 }
 
 impl Erc1155Balance {
@@ -100,8 +122,13 @@ impl Erc1155Balance {
         token_id: CairoUint256,
         owner: FieldElement,
         balance: CairoUint256,
+        last_updated: u64,
     ) -> Self {
-        Self { _id: Erc1155BalanceId { contract_address, token_id, owner }, balance }
+        Self { _id: Erc1155BalanceId { contract_address, token_id, owner }, balance, last_updated }
+    }
+
+    pub fn balance(&self) -> CairoUint256 {
+        self.balance
     }
 }
 
@@ -133,7 +160,7 @@ pub struct Attribute {
     pub value: AttributeValue,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct TokenMetadata {
     pub image: Option<String>,
     pub image_data: Option<String>,
@@ -146,16 +173,19 @@ pub struct TokenMetadata {
     pub youtube_url: Option<String>,
 }
 
-impl TokenMetadata {
-    pub const EMPTY: Self = Self {
-        name: None,
-        description: None,
-        image: None,
-        image_data: None,
-        external_url: None,
-        animation_url: None,
-        attributes: None,
-        background_color: None,
-        youtube_url: None,
-    };
+#[derive(Debug, Deserialize, Serialize)]
+pub struct IndexerMetadata {
+    last_sync: u64,
+}
+
+impl IndexerMetadata {
+    pub fn last_sync(&self) -> u64 {
+        self.last_sync
+    }
+}
+
+impl Default for IndexerMetadata {
+    fn default() -> Self {
+        Self { last_sync: 1630 }
+    }
 }

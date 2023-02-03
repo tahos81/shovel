@@ -20,7 +20,7 @@ pub mod token {
     use urlencoding;
 
     /// Gets the token URI for a given token ID
-    pub async fn get_token_uri(
+    pub async fn get_erc721_uri(
         address: FieldElement,
         block_id: &BlockId,
         rpc: &JsonRpcClient<HttpTransport>,
@@ -156,7 +156,7 @@ pub mod token {
                 // If it is only the URI without the data format information, try to format it
                 // and if it fails, return empty metadata
                 Ok(v) => Ok(v),
-                Err(_) => Ok(TokenMetadata::EMPTY),
+                Err(_) => Ok(TokenMetadata::default()),
             },
         }
     }

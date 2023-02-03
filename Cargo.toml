@@ -22,3 +22,6 @@ urlencoding = "2.1.2"
 aws-sdk-s3 = "0.24.0"
 aws-config = "0.54.1"
 resvg = "0.28.0"
+
+[[bin]]
+name="convert"
