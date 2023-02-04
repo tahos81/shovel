@@ -1,3 +1,4 @@
+#[allow(unused)]
 pub mod errors;
 pub mod metadata;
 pub mod s3;
