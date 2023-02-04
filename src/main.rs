@@ -21,7 +21,7 @@ async fn main() -> Result<()> {
 
     //first transfer event is in 1630
     let mut start_block = db::last_synced_block(&db, &mut session).await;
-    let range = 30;
+    let range = 10;
 
     while start_block < 16000 {
         session.start_transaction(None).await?;

@@ -91,7 +91,7 @@ impl Erc721CollectionInterface for Collection<Erc721> {
         session: &mut ClientSession,
     ) -> Result<()> {
         let query = doc! {"erc721id": {
-            "contract_address": contract_address.to_string(),
+            "contract_address": format!("{:#x}", contract_address),
             "token_id": {
                 "low": token_id.low.to_string(),
                 "high": token_id.high.to_string()
@@ -100,12 +100,12 @@ impl Erc721CollectionInterface for Collection<Erc721> {
 
         let update = doc! {
             "$set": {
-            "owner": new_owner.to_string(),
+            "owner": format!("{:#x}", new_owner),
             "last_updated": block_number as i32
             },
             "$push": {
                 "previous_owners": {
-                    "address": old_owner.to_string(),
+                    "address": format!("{:#x}", old_owner),
                     "block": block_number as i32
                 }
             }
@@ -141,12 +141,12 @@ impl Erc1155CollectionInterface for Collection<Erc1155Balance> {
         session: &mut ClientSession,
     ) -> Result<()> {
         let query = doc! {"_id": {
-            "contract_address": contract_address.to_string(),
+            "contract_address": format!("{:#x}", contract_address),
             "token_id": {
                 "low": token_id.low.to_string(),
                 "high": token_id.high.to_string()
             },
-            "owner": address.to_string()
+            "owner": format!("{:#x}", address)
         }};
 
         let update = doc! {
@@ -162,7 +162,7 @@ impl Erc1155CollectionInterface for Collection<Erc1155Balance> {
         let options = UpdateOptions::builder().upsert(true).build();
         println!("Updating erc1155 balance");
 
-        self.update_one_with_session(query, update, options.clone(), session).await?;
+        self.update_one_with_session(query, update, options, session).await?;
         Ok(())
     }
 
@@ -176,10 +176,10 @@ impl Erc1155CollectionInterface for Collection<Erc1155Balance> {
         let balance = self
             .find_one_with_session(
                 doc! {
-                    "_id.contract_address": contract_address.to_string(),
+                    "_id.contract_address": format!("{:#x}", contract_address),
                     "_id.token_id.low": token_id.low.to_string(),
                     "_id.token_id.high": token_id.high.to_string(),
-                    "_id.owner": address.to_string(),
+                    "_id.owner": format!("{:#x}", address),
                 },
                 None,
                 session,
@@ -210,7 +210,7 @@ impl Erc1155MetadataCollectionInterface for Collection<Erc1155Metadata> {
     ) -> Result<bool> {
         let query = doc! {
             "_id": {
-                "contract_address": contract_address.to_string(),
+                "contract_address": format!("{:#x}", contract_address),
                 "token_id": {
                     "low": token_id.low.to_string(),
                     "high": token_id.high.to_string()
@@ -239,7 +239,7 @@ impl ContractMetadataCollectionInterface for Collection<ContractMetadata> {
         contract_address: FieldElement,
         session: &mut ClientSession,
     ) -> Result<bool> {
-        let query = doc! {"_id": contract_address.to_string()};
+        let query = doc! {"_id": format!("{:#x}", contract_address)};
         //TODO: use find instead of find_one
         let result = self.find_one_with_session(query, None, session).await?;
         Ok(result.is_some())

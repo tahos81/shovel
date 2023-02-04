@@ -11,8 +11,6 @@ impl ToUtf8String for FieldElement {
     fn to_utf8_string(&self) -> String {
         let chars = self.to_bytes_be().into_iter().filter(|&v| v != 0_u8).collect();
 
-        dbg!(&chars);
-
         String::from_utf8(chars).unwrap_or_default()
     }
 }

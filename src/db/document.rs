@@ -3,16 +3,40 @@ use mongodb::bson::doc;
 use serde::{self, Deserialize, Serialize};
 use serde_json::Number;
 use starknet::core::types::FieldElement;
+use std::str::FromStr;
+
+#[derive(Debug)]
+struct HexFieldElement(FieldElement);
+
+impl Serialize for HexFieldElement {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&format!("{:#x}", self.0))
+    }
+}
+
+impl<'de> Deserialize<'de> for HexFieldElement {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        let inner = FieldElement::from_str(&value).map_err(serde::de::Error::custom)?;
+        Ok(Self(inner))
+    }
+}
 
 #[derive(Debug, Deserialize, Serialize)]
 struct AddressAtBlock {
-    address: FieldElement,
+    address: HexFieldElement,
     block: u64,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ContractMetadata {
-    _id: FieldElement,
+    _id: HexFieldElement,
     name: String,
     symbol: String,
     last_updated: u64,
@@ -25,26 +49,26 @@ impl ContractMetadata {
         symbol: String,
         last_updated: u64,
     ) -> Self {
-        Self { _id: contract_address, name, symbol, last_updated }
+        Self { _id: HexFieldElement(contract_address), name, symbol, last_updated }
     }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 struct Erc721Id {
-    contract_address: FieldElement,
+    contract_address: HexFieldElement,
     token_id: CairoUint256,
 }
 
 impl Erc721Id {
     pub fn new(contract_address: FieldElement, token_id: CairoUint256) -> Self {
-        Self { contract_address, token_id }
+        Self { contract_address: HexFieldElement(contract_address), token_id }
     }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Erc721 {
     erc721id: Erc721Id,
-    owner: FieldElement,
+    owner: HexFieldElement,
     previous_owners: Vec<AddressAtBlock>,
     token_uri: String,
     metadata: TokenMetadata,
@@ -62,7 +86,7 @@ impl Erc721 {
     ) -> Self {
         Self {
             erc721id: Erc721Id::new(contract_address, token_id),
-            owner,
+            owner: HexFieldElement(owner),
             previous_owners: vec![],
             token_uri,
             metadata,
@@ -73,7 +97,7 @@ impl Erc721 {
 
 #[derive(Debug, Deserialize, Serialize)]
 struct Erc1155MetadataId {
-    contract_address: FieldElement,
+    contract_address: HexFieldElement,
     token_id: CairoUint256,
 }
 
@@ -94,7 +118,10 @@ impl Erc1155Metadata {
         last_updated: u64,
     ) -> Self {
         Self {
-            _id: Erc1155MetadataId { contract_address, token_id },
+            _id: Erc1155MetadataId {
+                contract_address: HexFieldElement(contract_address),
+                token_id,
+            },
             token_uri,
             metadata,
             last_updated,
@@ -104,9 +131,9 @@ impl Erc1155Metadata {
 
 #[derive(Debug, Deserialize, Serialize)]
 struct Erc1155BalanceId {
-    contract_address: FieldElement,
+    contract_address: HexFieldElement,
     token_id: CairoUint256,
-    owner: FieldElement,
+    owner: HexFieldElement,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -124,7 +151,15 @@ impl Erc1155Balance {
         balance: CairoUint256,
         last_updated: u64,
     ) -> Self {
-        Self { _id: Erc1155BalanceId { contract_address, token_id, owner }, balance, last_updated }
+        Self {
+            _id: Erc1155BalanceId {
+                contract_address: HexFieldElement(contract_address),
+                token_id,
+                owner: HexFieldElement(owner),
+            },
+            balance,
+            last_updated,
+        }
     }
 
     pub fn balance(&self) -> CairoUint256 {

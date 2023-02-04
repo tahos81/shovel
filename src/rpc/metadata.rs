@@ -65,8 +65,6 @@ pub mod token {
         let mut token_uri_response: Option<Vec<FieldElement>> = None;
 
         for selector in possible_selectors {
-            println!("Trying selector: {}", selector.to_utf8_string());
-
             let request = FunctionCall {
                 contract_address: address,
                 entry_point_selector: selector,
@@ -148,7 +146,7 @@ pub mod token {
             }
             Some(("data:application/json", uri)) => {
                 // If it is plain json, parse it and return
-                println!("Handling {:?}", uri);
+                //println!("Handling {:?}", uri);
                 let metadata: TokenMetadata = serde_json::from_str(uri)?;
                 Ok(metadata)
             }
