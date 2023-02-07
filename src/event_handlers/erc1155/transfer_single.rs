@@ -130,7 +130,7 @@ pub async fn handle_transfer(
 
     // Update to balance
     match erc1155_collection
-        .get_erc1155_balance(contract_address, token_id, sender, session)
+        .get_erc1155_balance(contract_address, token_id, recipient, session)
         .await?
     {
         Some(previous_balance) => {
@@ -150,7 +150,13 @@ pub async fn handle_transfer(
             // Do insert
             erc1155_collection
                 .insert_erc1155_balance(
-                    Erc1155Balance::new(contract_address, token_id, sender, amount, block_number),
+                    Erc1155Balance::new(
+                        contract_address,
+                        token_id,
+                        recipient,
+                        amount,
+                        block_number,
+                    ),
                     session,
                 )
                 .await?;
