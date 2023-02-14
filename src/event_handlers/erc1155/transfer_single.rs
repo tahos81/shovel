@@ -5,7 +5,9 @@ use crate::{
             ContractMetadataCollectionInterface, Erc1155CollectionInterface,
             Erc1155MetadataCollectionInterface,
         },
-        document::{ContractMetadata, Erc1155Balance, Erc1155Metadata, TokenMetadata},
+        document::{
+            ContractMetadata, ContractType, Erc1155Balance, Erc1155Metadata, TokenMetadata,
+        },
     },
     event_handlers::context::Event,
     rpc::metadata::{
@@ -78,8 +80,13 @@ pub async fn handle_transfer(
         if !contract_metadata_exists {
             let name = contract::get_name(contract_address, block_id, rpc).await;
             let symbol = contract::get_symbol(contract_address, block_id, rpc).await;
-            let contract_metadata =
-                ContractMetadata::new(contract_address, name, symbol, block_number);
+            let contract_metadata = ContractMetadata::new(
+                contract_address,
+                name,
+                symbol,
+                ContractType::Erc1155,
+                block_number,
+            );
             contract_metadata_collection
                 .insert_contract_metadata(contract_metadata, session)
                 .await?;

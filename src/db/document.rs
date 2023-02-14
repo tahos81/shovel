@@ -35,10 +35,17 @@ struct AddressAtBlock {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+pub enum ContractType {
+    Erc721,
+    Erc1155,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct ContractMetadata {
     contract_address: HexFieldElement,
     name: String,
     symbol: String,
+    contract_type: ContractType,
     last_updated: u64,
 }
 
@@ -47,9 +54,16 @@ impl ContractMetadata {
         contract_address: FieldElement,
         name: String,
         symbol: String,
+        contract_type: ContractType,
         last_updated: u64,
     ) -> Self {
-        Self { contract_address: HexFieldElement(contract_address), name, symbol, last_updated }
+        Self {
+            contract_address: HexFieldElement(contract_address),
+            name,
+            symbol,
+            contract_type,
+            last_updated,
+        }
     }
 }
 

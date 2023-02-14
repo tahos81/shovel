@@ -2,7 +2,7 @@ use crate::{
     common::{starknet_constants::ZERO_FELT, types::CairoUint256},
     db::{
         collection::{ContractMetadataCollectionInterface, Erc721CollectionInterface},
-        document::{ContractMetadata, Erc721, TokenMetadata},
+        document::{ContractMetadata, ContractType, Erc721, TokenMetadata},
     },
     event_handlers::context::Event,
     rpc::metadata::{contract, token},
@@ -88,7 +88,13 @@ async fn handle_mint(
     if !contract_metadata_exists {
         let name = contract::get_name(contract_address, block_id, rpc).await;
         let symbol = contract::get_symbol(contract_address, block_id, rpc).await;
-        let contract_metadata = ContractMetadata::new(contract_address, name, symbol, block_number);
+        let contract_metadata = ContractMetadata::new(
+            contract_address,
+            name,
+            symbol,
+            ContractType::Erc721,
+            block_number,
+        );
         contract_metadata_collection.insert_contract_metadata(contract_metadata, session).await?;
     }
 
