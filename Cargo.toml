@@ -25,7 +25,8 @@ mongodb = { version = "2.3.1" }
 # AWS
 aws-sdk-s3 = "0.24.0"
 aws-config = "0.54.1"
-sqlx = { version = "0.6.0" , features = ["runtime-tokio-native-tls"] }
+sqlx = { version = "0.6.0" , features = ["runtime-tokio-native-tls", "postgres"] }
+refinery = { version = "0.8.7", features = ["tokio-postgres"] }
 
 [[bin]]
 name="convert"
