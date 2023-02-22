@@ -1,4 +1,4 @@
-use mongodb::Database;
+use sqlx::Pool;
 use starknet::{
     core::types::FieldElement,
     providers::jsonrpc::{
@@ -7,13 +7,13 @@ use starknet::{
     },
 };
 
-pub struct Event<'a, 'b> {
+pub struct Event<'a, 'b, Database> {
     event: &'b EmittedEvent,
     rpc: &'a JsonRpcClient<HttpTransport>,
-    db: &'a Database,
+    db: &'a Pool<Database>,
 }
 
-impl<'a, 'b> Event<'a, 'b> {
+impl<'a, 'b, Database> Event<'a, 'b, Database> {
     pub fn new(
         event: &'b EmittedEvent,
         rpc: &'a JsonRpcClient<HttpTransport>,
@@ -42,7 +42,7 @@ impl<'a, 'b> Event<'a, 'b> {
         self.rpc
     }
 
-    pub fn db(&self) -> &Database {
+    pub fn db(&self) -> &Pool<Database> {
         self.db
     }
 }

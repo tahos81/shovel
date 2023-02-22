@@ -2,7 +2,7 @@
 #![allow(clippy::unreadable_literal)]
 mod common;
 mod db;
-mod event_handlers;
+mod events;
 mod file_storage;
 mod rpc;
 
@@ -15,7 +15,7 @@ async fn main() -> Result<()> {
     dotenv().ok();
 
     let rpc = rpc::connect()?;
-    let (db, mut session) = db::connect().await?;
+    let (db, mut session) = db::mongo::connect().await?;
 
     db::drop_collections(&db).await?;
 

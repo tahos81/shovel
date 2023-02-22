@@ -1,12 +1,11 @@
 pub mod context;
-mod erc1155;
-mod erc721;
+pub mod erc1155;
+pub mod erc721;
 
 use crate::{
     common::starknet_constants::{
         TRANSFER_BATCH_EVENT_KEY, TRANSFER_EVENT_KEY, TRANSFER_SINGLE_EVENT_KEY,
     },
-    event_handlers,
     rpc::metadata::contract,
 };
 use color_eyre::eyre::Result;
