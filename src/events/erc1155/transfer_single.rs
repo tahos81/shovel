@@ -1,17 +1,33 @@
 use crate::{
     common::types::CairoUint256,
+    db::postgres::process::ProcessEvent,
     events::context::Event,
     rpc::metadata::{
         contract,
         token::{self, get_token_metadata},
     },
 };
+use async_trait::async_trait;
 use color_eyre::eyre::Result;
 use sqlx::{Pool, Postgres};
 use starknet::{
     core::types::FieldElement,
     providers::jsonrpc::{models::BlockId, HttpTransport, JsonRpcClient},
 };
+
+pub struct Erc1155TransferSingle {
+    pub sender: FieldElement,
+    pub recipient: FieldElement,
+    pub token_id: CairoUint256,
+    pub amount: CairoUint256,
+}
+
+#[async_trait]
+impl ProcessEvent for Erc1155TransferSingle {
+    async fn process(&mut self, pool: &mut Pool<Postgres>) {
+        todo!()
+    }
+}
 
 pub async fn run<Database>(event_context: &Event<'_, '_, Database>) -> Result<()> {
     let contract_address = event_context.contract_address();

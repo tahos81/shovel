@@ -3,16 +3,30 @@ use crate::{
     db::{
         collection::{ContractMetadataCollectionInterface, Erc721CollectionInterface},
         document::{ContractMetadata, Erc721, TokenMetadata},
+        postgres::process::ProcessEvent,
     },
     event_handlers::context::Event,
     rpc::metadata::{contract, token},
 };
+use async_trait::async_trait;
 use color_eyre::eyre::Result;
 use mongodb::{ClientSession, Collection};
+use sqlx::{Pool, Postgres};
 use starknet::{
     core::types::FieldElement,
     providers::jsonrpc::{models::BlockId, HttpTransport, JsonRpcClient},
 };
+
+pub struct Erc721Transfer {
+    pub sender: FieldElement,
+    pub recipient: FieldElement,
+    pub token_id: CairoUint256,
+}
+
+#[async_trait]
+impl ProcessEvent for Erc721Transfer {
+    fn process(&mut self, pool: &Pool<Postgres>) {}
+}
 
 pub async fn run(event_context: &Event<'_, '_>, session: &mut ClientSession) -> Result<()> {
     let contract_address = event_context.contract_address();

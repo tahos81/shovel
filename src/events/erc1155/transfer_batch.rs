@@ -1,11 +1,22 @@
-use crate::{common::types::CairoUint256, events::context::Event};
+use crate::{
+    common::types::CairoUint256, db::postgres::process::ProcessEvent, events::context::Event,
+};
+use async_trait::async_trait;
 use color_eyre::eyre::Result;
+use sqlx::{Pool, Postgres};
 use starknet::core::types::FieldElement;
 
 pub struct Erc1155TransferBatch {
     pub sender: FieldElement,
     pub recipient: FieldElement,
     pub transfers: Vec<(CairoUint256, CairoUint256)>,
+}
+
+#[async_trait]
+impl ProcessEvent for Erc1155TransferBatch {
+    async fn process(&mut self, pool: &mut Pool<Postgres>) {
+        todo!()
+    }
 }
 
 pub async fn run<Database>(

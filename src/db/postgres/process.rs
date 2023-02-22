@@ -3,5 +3,5 @@ use sqlx::{Pool, Postgres};
 
 #[async_trait]
 pub trait ProcessEvent {
-    async fn process(&mut self, pool: &mut Pool<Postgres>);
+    async fn process(&mut self, pool: &Pool<Postgres>);
 }
