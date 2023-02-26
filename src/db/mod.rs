@@ -16,7 +16,14 @@ pub async fn connect() -> Result<(Database, ClientSession), ConfigError> {
 
     let client = Client::with_options(client_options)?;
     let session = client.start_session(None).await?;
-    Ok((client.database("shovel"), session))
+    let db = client.database("shovel");
+    // db.run_command_with_session(
+    //     doc! { "setParameter": 1, "transactionLifetimeSeconds": 600 },
+    //     None,
+    //     &mut session,
+    // )
+    // .await?;
+    Ok((db, session))
 }
 
 pub async fn last_synced_block(db: &Database, session: &mut ClientSession) -> u64 {

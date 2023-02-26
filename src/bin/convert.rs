@@ -1,3 +1,4 @@
+#![allow(unused)]
 #[path = "../file_storage/svg_to_png.rs"]
 mod svg_to_png;
 

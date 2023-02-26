@@ -90,7 +90,7 @@ impl Erc721CollectionInterface for Collection<Erc721> {
         block_number: u64,
         session: &mut ClientSession,
     ) -> Result<()> {
-        let query = doc! {"erc721id": {
+        let query = doc! {"erc721_id": {
             "contract_address": format!("{:#x}", contract_address),
             "token_id": {
                 "low": token_id.low.to_string(),
@@ -140,7 +140,7 @@ impl Erc1155CollectionInterface for Collection<Erc1155Balance> {
         block_number: u64,
         session: &mut ClientSession,
     ) -> Result<()> {
-        let query = doc! {"_id": {
+        let query = doc! {"erc1155_balance_id": {
             "contract_address": format!("{:#x}", contract_address),
             "token_id": {
                 "low": token_id.low.to_string(),
@@ -176,10 +176,10 @@ impl Erc1155CollectionInterface for Collection<Erc1155Balance> {
         let balance = self
             .find_one_with_session(
                 doc! {
-                    "_id.contract_address": format!("{:#x}", contract_address),
-                    "_id.token_id.low": token_id.low.to_string(),
-                    "_id.token_id.high": token_id.high.to_string(),
-                    "_id.owner": format!("{:#x}", address),
+                    "erc1155_balance_id.contract_address": format!("{:#x}", contract_address),
+                    "erc1155_balance_id.token_id.low": token_id.low.to_string(),
+                    "erc1155_balance_id.token_id.high": token_id.high.to_string(),
+                    "erc1155_balance_id.owner": format!("{:#x}", address),
                 },
                 None,
                 session,
@@ -209,7 +209,7 @@ impl Erc1155MetadataCollectionInterface for Collection<Erc1155Metadata> {
         session: &mut ClientSession,
     ) -> Result<bool> {
         let query = doc! {
-            "_id": {
+            "erc1155_metadata_id": {
                 "contract_address": format!("{:#x}", contract_address),
                 "token_id": {
                     "low": token_id.low.to_string(),
@@ -239,8 +239,7 @@ impl ContractMetadataCollectionInterface for Collection<ContractMetadata> {
         contract_address: FieldElement,
         session: &mut ClientSession,
     ) -> Result<bool> {
-        let query = doc! {"_id": format!("{:#x}", contract_address)};
-        //TODO: use find instead of find_one
+        let query = doc! {"contract_address": format!("{:#x}", contract_address)};
         let result = self.find_one_with_session(query, None, session).await?;
         Ok(result.is_some())
     }

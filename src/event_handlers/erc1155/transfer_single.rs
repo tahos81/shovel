@@ -5,7 +5,9 @@ use crate::{
             ContractMetadataCollectionInterface, Erc1155CollectionInterface,
             Erc1155MetadataCollectionInterface,
         },
-        document::{ContractMetadata, Erc1155Balance, Erc1155Metadata, TokenMetadata},
+        document::{
+            ContractMetadata, ContractType, Erc1155Balance, Erc1155Metadata, TokenMetadata,
+        },
     },
     event_handlers::context::Event,
     rpc::metadata::{
@@ -78,8 +80,13 @@ pub async fn handle_transfer(
         if !contract_metadata_exists {
             let name = contract::get_name(contract_address, block_id, rpc).await;
             let symbol = contract::get_symbol(contract_address, block_id, rpc).await;
-            let contract_metadata =
-                ContractMetadata::new(contract_address, name, symbol, block_number);
+            let contract_metadata = ContractMetadata::new(
+                contract_address,
+                name,
+                symbol,
+                ContractType::Erc1155,
+                block_number,
+            );
             contract_metadata_collection
                 .insert_contract_metadata(contract_metadata, session)
                 .await?;
@@ -130,7 +137,7 @@ pub async fn handle_transfer(
 
     // Update to balance
     match erc1155_collection
-        .get_erc1155_balance(contract_address, token_id, sender, session)
+        .get_erc1155_balance(contract_address, token_id, recipient, session)
         .await?
     {
         Some(previous_balance) => {
@@ -150,7 +157,13 @@ pub async fn handle_transfer(
             // Do insert
             erc1155_collection
                 .insert_erc1155_balance(
-                    Erc1155Balance::new(contract_address, token_id, sender, amount, block_number),
+                    Erc1155Balance::new(
+                        contract_address,
+                        token_id,
+                        recipient,
+                        amount,
+                        block_number,
+                    ),
                     session,
                 )
                 .await?;
