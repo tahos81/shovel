@@ -1,7 +1,8 @@
+use crate::events::context::Event;
 use async_trait::async_trait;
-use sqlx::{Pool, Postgres};
+use color_eyre::eyre::Result;
 
 #[async_trait]
 pub trait ProcessEvent {
-    async fn process(&mut self, pool: &Pool<Postgres>);
+    async fn process(&mut self, ctx: &Event<'_, '_>) -> Result<()>;
 }
