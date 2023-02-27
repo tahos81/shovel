@@ -1,137 +1,192 @@
 use crate::{
     common::{starknet_constants::ZERO_FELT, types::CairoUint256},
-    db::{
-        collection::{ContractMetadataCollectionInterface, Erc721CollectionInterface},
-        document::{ContractMetadata, Erc721, TokenMetadata},
-        postgres::process::ProcessEvent,
-    },
-    event_handlers::context::Event,
+    db::postgres::process::ProcessEvent,
+    events::context::Event,
     rpc::metadata::{contract, token},
 };
 use async_trait::async_trait;
 use color_eyre::eyre::Result;
-use mongodb::{ClientSession, Collection};
-use sqlx::{Pool, Postgres};
-use starknet::{
-    core::types::FieldElement,
-    providers::jsonrpc::{models::BlockId, HttpTransport, JsonRpcClient},
-};
+use starknet::{core::types::FieldElement, providers::jsonrpc::models::BlockId};
+use token::TokenMetadata;
 
 pub struct Erc721Transfer {
     pub sender: FieldElement,
     pub recipient: FieldElement,
     pub token_id: CairoUint256,
+    pub contract_address: FieldElement,
+    pub block_number: u64,
 }
 
 #[async_trait]
 impl ProcessEvent for Erc721Transfer {
-    fn process(&mut self, pool: &Pool<Postgres>) {}
+    async fn process(&mut self, ctx: &Event<'_, '_>) -> Result<()> {
+        if self.sender == ZERO_FELT {
+            processors::handle_mint(&self, ctx).await
+        } else {
+            processors::handle_transfer(&self, ctx).await
+        }
+    }
 }
 
-pub async fn run(event_context: &Event<'_, '_>, session: &mut ClientSession) -> Result<()> {
-    let contract_address = event_context.contract_address();
-    let block_id = event_context.block_id();
-    let block_number = event_context.block_number();
-    let event_data = event_context.data();
-    let db = event_context.db();
-    let rpc = event_context.rpc();
+pub async fn run(ctx: &Event<'_, '_>) -> Result<()> {
+    let contract_address = ctx.contract_address();
+    let block_number = ctx.block_number();
+    let event_data = ctx.data();
 
     let sender = event_data[0];
     let recipient = event_data[1];
     let token_id = CairoUint256::new(event_data[2], *event_data.get(3).unwrap_or(&ZERO_FELT));
 
-    let erc721_collection = db.collection::<Erc721>("erc721_tokens");
-    let contract_metadata_collection = db.collection::<ContractMetadata>("contract_metadata");
+    Erc721Transfer { sender, recipient, token_id, contract_address, block_number }
+        .process(ctx)
+        .await
+}
 
-    if sender == ZERO_FELT {
-        handle_mint(
-            contract_address,
-            &block_id,
-            block_number,
-            recipient,
-            token_id,
-            rpc,
-            &erc721_collection,
-            &contract_metadata_collection,
-            session,
+mod processors {
+    use super::*;
+
+    pub async fn handle_mint(event: &Erc721Transfer, ctx: &Event<'_, '_>) -> Result<()> {
+        let block_id = BlockId::Number(event.block_number);
+        let block_number = i64::try_from(event.block_number).unwrap();
+
+        let token_uri =
+            token::get_erc721_uri(event.contract_address, &block_id, ctx.rpc(), event.token_id)
+                .await;
+        let metadata_result = token::get_token_metadata(&token_uri).await;
+        let metadata = match metadata_result {
+            Ok(metadata) => metadata,
+            Err(_) => TokenMetadata::default(),
+        };
+
+        // Check contract metadata
+        let contract_metadata_exists = sqlx::query!(
+            r#"
+                SELECT EXISTS (
+                    SELECT * 
+                    FROM contract_metadata 
+                    WHERE
+                        contract_address = $1 AND
+                        contract_type = 'ERC721'
+                )
+            "#,
+            event.contract_address.to_string()
         )
-        .await
-    } else if recipient == ZERO_FELT {
-        handle_burn(contract_address, block_number, sender, token_id, &erc721_collection, session)
-            .await
-    } else {
-        handle_transfer(
-            contract_address,
-            block_number,
-            sender,
-            recipient,
-            token_id,
-            &erc721_collection,
-            session,
+        .fetch_one(ctx.transaction())
+        .await?
+        .exists
+        .unwrap_or_default();
+
+        if !contract_metadata_exists {
+            let name = contract::get_name(event.contract_address, &block_id, ctx.rpc()).await;
+            let symbol = contract::get_symbol(event.contract_address, &block_id, ctx.rpc()).await;
+
+            sqlx::query!(
+                r#"
+                    INSERT INTO contract_metadata(
+                        contract_address,
+                        contract_type,
+                        name,
+                        symbol,
+                        last_updated_block)
+                    VALUES ($1, 'ERC721', $2, $3, $4)
+                "#,
+                event.contract_address.to_string(),
+                name,
+                symbol,
+                block_number
+            )
+            .execute(ctx.transaction())
+            .await?;
+        }
+
+        // Insert Erc721 data
+        let inserted_id = sqlx::query!(
+            r#"
+                INSERT INTO erc721_data(
+                    contract_address,
+                    token_id_low,
+                    token_id_high,
+                    latest_owner,
+                    token_uri,
+                    last_updated_block)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                RETURNING id
+            "#,
+            event.contract_address.to_string(),
+            event.token_id.low.to_string(),
+            event.token_id.high.to_string(),
+            event.recipient.to_string(),
+            token_uri,
+            i64::try_from(event.block_number).unwrap()
         )
-        .await
-    }
-}
+        .fetch_one(ctx.transaction())
+        .await?
+        .id;
 
-async fn handle_mint(
-    contract_address: FieldElement,
-    block_id: &BlockId,
-    block_number: u64,
-    recipient: FieldElement,
-    token_id: CairoUint256,
-    rpc: &JsonRpcClient<HttpTransport>,
-    erc721_collection: &Collection<Erc721>,
-    contract_metadata_collection: &Collection<ContractMetadata>,
-    session: &mut ClientSession,
-) -> Result<()> {
-    let token_uri = token::get_erc721_uri(contract_address, block_id, rpc, token_id).await;
-    let metadata_result = token::get_token_metadata(&token_uri).await;
-    let metadata = match metadata_result {
-        Ok(metadata) => metadata,
-        Err(_) => TokenMetadata::default(),
-    };
+        // Add address to owners
+        sqlx::query!(
+            r#"
+                INSERT INTO erc721_owners(erc721_id, owner, block)
+                VALUES($1, $2, $3)
+            "#,
+            inserted_id,
+            event.recipient.to_string(),
+            block_number
+        )
+        .execute(ctx.transaction())
+        .await?;
 
-    let erc721_token =
-        Erc721::new(contract_address, token_id, recipient, token_uri, metadata, block_number);
-
-    erc721_collection.insert_erc721(erc721_token, session).await?;
-
-    let contract_metadata_exists =
-        contract_metadata_collection.contract_metadata_exists(contract_address, session).await?;
-
-    if !contract_metadata_exists {
-        let name = contract::get_name(contract_address, block_id, rpc).await;
-        let symbol = contract::get_symbol(contract_address, block_id, rpc).await;
-        let contract_metadata = ContractMetadata::new(contract_address, name, symbol, block_number);
-        contract_metadata_collection.insert_contract_metadata(contract_metadata, session).await?;
+        Ok(())
     }
 
-    Ok(())
-}
+    pub async fn handle_transfer(event: &Erc721Transfer, ctx: &Event<'_, '_>) -> Result<()> {
+        let block_number = i64::try_from(event.block_number).unwrap();
 
-async fn handle_burn(
-    contract_address: FieldElement,
-    block_number: u64,
-    sender: FieldElement,
-    token_id: CairoUint256,
-    erc721_collection: &Collection<Erc721>,
-    session: &mut ClientSession,
-) -> Result<()> {
-    erc721_collection
-        .update_erc721_owner(contract_address, token_id, sender, ZERO_FELT, block_number, session)
-        .await
-}
+        // Find the ERC721 entry with given contract address and id
+        let erc721_id = sqlx::query!(
+            r#"
+            SELECT id
+            FROM erc721_data
+            WHERE
+                contract_address = $1 AND
+                token_id_low = $2 AND
+                token_id_high = $3
+            "#,
+            event.contract_address.to_string(),
+            event.token_id.low.to_string(),
+            event.token_id.high.to_string(),
+        )
+        .fetch_one(ctx.transaction())
+        .await?
+        .id;
 
-async fn handle_transfer(
-    contract_address: FieldElement,
-    block_number: u64,
-    sender: FieldElement,
-    recipient: FieldElement,
-    token_id: CairoUint256,
-    erc721_collection: &Collection<Erc721>,
-    session: &mut ClientSession,
-) -> Result<()> {
-    erc721_collection
-        .update_erc721_owner(contract_address, token_id, sender, recipient, block_number, session)
-        .await
+        // Update latest owner
+        sqlx::query!(
+            r#"
+                UPDATE erc721_data
+                SET latest_owner = $1, last_updated_block = $2
+                WHERE id = $3
+            "#,
+            event.recipient.to_string(),
+            block_number,
+            erc721_id,
+        )
+        .execute(ctx.transaction())
+        .await?;
+
+        // Update owners list
+        sqlx::query!(
+            r#"
+                INSERT INTO erc721_owners(erc721_id, owner, block)
+                VALUES($1, $2, $3)
+            "#,
+            erc721_id,
+            event.recipient.to_string(),
+            block_number
+        )
+        .execute(ctx.transaction())
+        .await?;
+
+        Ok(())
+    }
 }
