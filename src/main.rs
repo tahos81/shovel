@@ -2,49 +2,44 @@
 #![allow(clippy::unreadable_literal)]
 mod common;
 mod db;
-mod event_handlers;
+mod events;
 mod file_storage;
 mod rpc;
 
 use color_eyre::eyre::Result;
 use dotenv::dotenv;
-use mongodb::error::UNKNOWN_TRANSACTION_COMMIT_RESULT;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenv().ok();
 
     let rpc = rpc::connect()?;
-    let (db, mut session) = db::connect().await?;
 
-    db::drop_collections(&db).await?;
+    let conn_str =
+        std::env::var("DATABASE_URL").expect("Env var DATABASE_URL is required");
+    let pool = sqlx::PgPool::connect(&conn_str).await?;
+
+    // Drop everythin from tables
+    db::postgres::drop_everything(&pool).await?;
 
     //first transfer event is in 1630
-    let mut start_block = db::last_synced_block(&db, &mut session).await;
+    let mut start_block = db::postgres::last_synced_block(&pool).await?;
     let range = 10;
 
     while start_block < 16000 {
-        session.start_transaction(None).await?;
 
         println!("getting events between block {} and {}", start_block, start_block + range);
         let transfer_events = rpc::get_transfer_events::run(start_block, range, &rpc).await?;
         println!("got {} events in total", transfer_events.len());
 
-        event_handlers::handle_transfer_events(transfer_events, &rpc, &db, &mut session).await?;
+        let mut transaction = pool.begin().await?;
+        events::handle_transfer_events(transfer_events, &rpc, &mut transaction).await?;
+        db::postgres::update_last_synced_block(start_block, &mut transaction).await?;
+        transaction.commit().await?;
+
         println!("events handled");
 
         start_block += range;
-        db::update_last_synced_block(&db, start_block, &mut session).await?;
-
-        loop {
-            let result = session.commit_transaction().await;
-            if let Err(ref error) = result {
-                if error.contains_label(UNKNOWN_TRANSACTION_COMMIT_RESULT) {
-                    continue;
-                }
-            }
-            break result?;
-        }
     }
 
     Ok(())

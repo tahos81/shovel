@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use crate::common::types::CairoUint256;
 use mongodb::bson::doc;
 use serde::{self, Deserialize, Serialize};
@@ -33,6 +35,7 @@ struct AddressAtBlock {
     address: HexFieldElement,
     block: u64,
 }
+
 
 #[derive(Debug, Deserialize, Serialize)]
 pub enum ContractType {
