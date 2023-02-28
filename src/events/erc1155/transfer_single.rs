@@ -1,5 +1,6 @@
 use crate::{
-    common::types::CairoUint256, db::postgres::process::ProcessEvent, rpc::metadata::contract,
+    common::types::CairoUint256, db::postgres::process::ProcessEvent, events::HexFieldElement,
+    rpc::metadata::contract,
 };
 use async_trait::async_trait;
 use color_eyre::eyre::Result;
@@ -12,12 +13,32 @@ use starknet::{
 };
 
 pub struct Erc1155TransferSingle {
-    pub sender: FieldElement,
-    pub recipient: FieldElement,
+    pub sender: HexFieldElement,
+    pub recipient: HexFieldElement,
     pub token_id: CairoUint256,
     pub amount: CairoUint256,
-    pub contract_address: FieldElement,
+    pub contract_address: HexFieldElement,
     pub block_number: u64,
+}
+
+impl Erc1155TransferSingle {
+    pub fn new(
+        sender: FieldElement,
+        recipient: FieldElement,
+        token_id: CairoUint256,
+        amount: CairoUint256,
+        contract_address: FieldElement,
+        block_number: u64,
+    ) -> Self {
+        Erc1155TransferSingle {
+            sender: HexFieldElement(sender),
+            recipient: HexFieldElement(recipient),
+            token_id,
+            amount,
+            contract_address: HexFieldElement(contract_address),
+            block_number,
+        }
+    }
 }
 
 #[async_trait]
@@ -45,7 +66,7 @@ pub async fn run(
     let token_id = CairoUint256::new(event_data[3], event_data[4]);
     let amount = CairoUint256::new(event_data[5], event_data[6]);
 
-    Erc1155TransferSingle { sender, recipient, token_id, amount, contract_address, block_number }
+    Erc1155TransferSingle::new(sender, recipient, token_id, amount, contract_address, block_number)
         .process(rpc, transaction)
         .await
 }
@@ -86,8 +107,8 @@ mod processors {
 
             if !contract_metadata_exists {
                 // Query name and symbol, then insert contract metadata
-                let name = contract::get_name(event.contract_address, &block_id, rpc).await;
-                let symbol = contract::get_symbol(event.contract_address, &block_id, rpc).await;
+                let name = contract::get_name(event.contract_address.0, &block_id, rpc).await;
+                let symbol = contract::get_symbol(event.contract_address.0, &block_id, rpc).await;
 
                 sqlx::query!(
                     r#"
@@ -128,7 +149,6 @@ mod processors {
             if !token_metadata_exists {
                 fetch_and_insert_metadata(event, rpc, &mut *transaction).await?;
             }
-
         } else {
             let balance_record = sqlx::query!(
                 r#"
@@ -261,7 +281,7 @@ mod processors {
         let block_id = BlockId::Number(event.block_number);
 
         let token_uri =
-            token::get_erc1155_uri(event.contract_address, &block_id, rpc, event.token_id).await;
+            token::get_erc1155_uri(event.contract_address.0, &block_id, rpc, event.token_id).await;
         let metadata_result = token::get_token_metadata(&token_uri).await;
         let metadata = match metadata_result {
             Ok(metadata) => metadata,

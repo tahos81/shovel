@@ -2,6 +2,7 @@ pub mod erc1155;
 pub mod erc721;
 
 use color_eyre::eyre::Result;
+use serde::{Deserialize, Serialize};
 use starknet::{
     core::types::FieldElement,
     providers::jsonrpc::{
@@ -9,7 +10,7 @@ use starknet::{
         HttpTransport, JsonRpcClient,
     },
 };
-use std::collections::HashSet;
+use std::{collections::HashSet, str::FromStr};
 
 use crate::{
     common::starknet_constants::{
@@ -51,4 +52,47 @@ pub async fn handle_transfer_events<'ctx>(
     }
 
     Ok(())
+}
+
+// TODO: Move to a more suiting folder
+
+#[derive(Debug)]
+pub struct HexFieldElement(FieldElement);
+
+impl Serialize for HexFieldElement {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&format!("{:#x}", self.0))
+    }
+}
+
+impl<'de> Deserialize<'de> for HexFieldElement {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        let inner = FieldElement::from_str(&value).map_err(serde::de::Error::custom)?;
+        Ok(Self(inner))
+    }
+}
+
+impl ToString for HexFieldElement {
+    fn to_string(&self) -> String {
+        format!("{:#x}", self.0)
+    }
+}
+
+impl Into<FieldElement> for HexFieldElement {
+    fn into(self) -> FieldElement {
+        self.0
+    }
+}
+
+impl PartialEq<FieldElement> for HexFieldElement {
+    fn eq(&self, other: &FieldElement) -> bool {
+        self.0 == *other
+    }
 }

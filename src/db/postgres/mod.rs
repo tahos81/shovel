@@ -13,6 +13,8 @@ pub async fn drop_everything(pool: &sqlx::Pool<sqlx::Postgres>) -> Result<()> {
     sqlx::query!("DELETE FROM erc721_owners").execute(&mut transaction).await?;
     sqlx::query!("DELETE FROM erc1155_balances").execute(&mut transaction).await?;
 
+    transaction.commit().await?;
+
     Ok(())
 }
 
@@ -29,13 +31,13 @@ pub async fn last_synced_block(pool: &sqlx::Pool<sqlx::Postgres>) -> Result<u64>
 
 pub async fn update_last_synced_block(
     block_number: u64,
-    pool: &sqlx::Pool<sqlx::Postgres>,
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 ) -> Result<()> {
     sqlx::query!(
         "UPDATE sync_data SET last_synced_block = $1",
         i64::try_from(block_number).expect("block_number parse fail")
     )
-    .execute(pool)
+    .execute(&mut *transaction)
     .await?;
 
     Ok(())

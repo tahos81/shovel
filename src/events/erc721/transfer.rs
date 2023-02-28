@@ -1,6 +1,7 @@
 use crate::{
     common::{starknet_constants::ZERO_FELT, types::CairoUint256},
     db::postgres::process::ProcessEvent,
+    events::HexFieldElement,
     rpc::metadata::{contract, token},
 };
 use async_trait::async_trait;
@@ -15,11 +16,29 @@ use starknet::{
 use token::TokenMetadata;
 
 pub struct Erc721Transfer {
-    pub sender: FieldElement,
-    pub recipient: FieldElement,
+    pub sender: HexFieldElement,
+    pub recipient: HexFieldElement,
     pub token_id: CairoUint256,
-    pub contract_address: FieldElement,
+    pub contract_address: HexFieldElement,
     pub block_number: u64,
+}
+
+impl Erc721Transfer {
+    pub fn new(
+        sender: FieldElement,
+        recipient: FieldElement,
+        token_id: CairoUint256,
+        contract_address: FieldElement,
+        block_number: u64,
+    ) -> Self {
+        Erc721Transfer {
+            sender: HexFieldElement(sender),
+            recipient: HexFieldElement(recipient),
+            token_id,
+            contract_address: HexFieldElement(contract_address),
+            block_number,
+        }
+    }
 }
 
 #[async_trait]
@@ -50,7 +69,7 @@ pub async fn run(
     let recipient = event_data[1];
     let token_id = CairoUint256::new(event_data[2], *event_data.get(3).unwrap_or(&ZERO_FELT));
 
-    Erc721Transfer { sender, recipient, token_id, contract_address, block_number }
+    Erc721Transfer::new(sender, recipient, token_id, contract_address, block_number)
         .process(rpc, transaction)
         .await
 }
@@ -86,8 +105,8 @@ mod processors {
         .unwrap_or_default();
 
         if !contract_metadata_exists {
-            let name = contract::get_name(event.contract_address, &block_id, rpc).await;
-            let symbol = contract::get_symbol(event.contract_address, &block_id, rpc).await;
+            let name = contract::get_name(event.contract_address.0, &block_id, rpc).await;
+            let symbol = contract::get_symbol(event.contract_address.0, &block_id, rpc).await;
 
             sqlx::query!(
                 r#"
@@ -210,7 +229,7 @@ mod processors {
         let block_id = BlockId::Number(event.block_number);
 
         let token_uri =
-            token::get_erc721_uri(event.contract_address, &block_id, rpc, event.token_id).await;
+            token::get_erc721_uri(event.contract_address.0, &block_id, rpc, event.token_id).await;
         let metadata_result = token::get_token_metadata(&token_uri).await;
         let metadata = match metadata_result {
             Ok(metadata) => metadata,

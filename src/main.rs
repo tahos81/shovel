@@ -16,7 +16,7 @@ async fn main() -> Result<()> {
     let rpc = rpc::connect()?;
 
     let conn_str =
-        std::env::var("DATABASE_URL").expect("Env var DATABASE_URL is required for this example.");
+        std::env::var("DATABASE_URL").expect("Env var DATABASE_URL is required");
     let pool = sqlx::PgPool::connect(&conn_str).await?;
 
     // Drop everythin from tables
@@ -34,12 +34,12 @@ async fn main() -> Result<()> {
 
         let mut transaction = pool.begin().await?;
         events::handle_transfer_events(transfer_events, &rpc, &mut transaction).await?;
+        db::postgres::update_last_synced_block(start_block, &mut transaction).await?;
         transaction.commit().await?;
 
         println!("events handled");
 
         start_block += range;
-        db::postgres::update_last_synced_block(start_block, &pool).await?;
     }
 
     Ok(())

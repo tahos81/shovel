@@ -1,4 +1,6 @@
-use crate::{common::types::CairoUint256, db::postgres::process::ProcessEvent};
+use crate::{
+    common::types::CairoUint256, db::postgres::process::ProcessEvent, events::HexFieldElement,
+};
 use async_trait::async_trait;
 use color_eyre::eyre::Result;
 use starknet::{
@@ -12,8 +14,26 @@ pub struct Erc1155TransferBatch {
     pub sender: FieldElement,
     pub recipient: FieldElement,
     pub transfers: Vec<(CairoUint256, CairoUint256)>,
-    pub contract_address: FieldElement,
+    pub contract_address: HexFieldElement,
     pub block_number: u64,
+}
+
+impl Erc1155TransferBatch {
+    pub fn new(
+        sender: FieldElement,
+        recipient: FieldElement,
+        transfers: Vec<(CairoUint256, CairoUint256)>,
+        contract_address: FieldElement,
+        block_number: u64,
+    ) -> Self {
+        Erc1155TransferBatch {
+            sender,
+            recipient,
+            transfers,
+            contract_address: HexFieldElement(contract_address),
+            block_number,
+        }
+    }
 }
 
 #[async_trait]
@@ -24,14 +44,14 @@ impl ProcessEvent for Erc1155TransferBatch {
         transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     ) -> Result<()> {
         for transfer in &self.transfers {
-            Erc1155TransferSingle {
-                sender: self.sender,
-                recipient: self.recipient,
-                token_id: transfer.0,
-                amount: transfer.1,
-                contract_address: self.contract_address,
-                block_number: self.block_number,
-            }
+            Erc1155TransferSingle::new(
+                self.sender,
+                self.recipient,
+                transfer.0,
+                transfer.1,
+                self.contract_address.0,
+                self.block_number,
+            )
             .process(rpc, transaction)
             .await?;
         }
@@ -70,7 +90,7 @@ pub async fn run(
         )
         .collect();
 
-    Erc1155TransferBatch { sender, recipient, transfers, contract_address, block_number }
+    Erc1155TransferBatch::new(sender, recipient, transfers, contract_address, block_number)
         .process(rpc, transaction)
         .await?;
 
