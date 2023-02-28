@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use crate::db::document::TokenMetadata;
+use crate::rpc::metadata::token::TokenMetadata;
 
 use super::{s3::AwsS3Storage, svg_to_png::svg_to_png};
 

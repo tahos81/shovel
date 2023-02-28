@@ -6,22 +6,27 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio = { version = "1.23.0", features = ["full"] }
-starknet = { git = "https://github.com/xJonathanLEI/starknet-rs" }
-mongodb = { version = "2.3.1" }
-reqwest = { version = "0.11.13" }
-dotenv = "0.15.0"
 serde = "1.0.152"
-thiserror = "1.0.38"
-async-trait = "0.1.61"
-url = "2.3.1"
-color-eyre = "0.6.2"
 serde_json = "1.0.91"
-base64 = "0.21.0"
+tokio = { version = "1.23.0", features = ["full"] }
+reqwest = { version = "0.11.13" }
+url = "2.3.1"
 urlencoding = "2.1.2"
+dotenv = "0.15.0"
+async-trait = "0.1.61"
+thiserror = "1.0.38"
+color-eyre = "0.6.2"
+base64 = "0.21.0"
+resvg = "0.28.0"
+# Starknet
+starknet = { git = "https://github.com/xJonathanLEI/starknet-rs" }
+# Database
+mongodb = { version = "2.3.1" }
+# AWS
 aws-sdk-s3 = "0.24.0"
 aws-config = "0.54.1"
-resvg = "0.28.0"
+sqlx = { version = "0.6.0" , features = ["runtime-tokio-native-tls", "postgres"] }
+refinery = { version = "0.8.7", features = ["tokio-postgres"] }
 
 [[bin]]
 name="convert"
