@@ -19,16 +19,23 @@ pub struct Erc721Transfer {
 
 #[async_trait]
 impl ProcessEvent for Erc721Transfer {
-    async fn process(&mut self, ctx: &Event<'_, '_>) -> Result<()> {
+    async fn process(
+        &mut self,
+        ctx: &Event<'_, '_>,
+        transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> Result<()> {
         if self.sender == ZERO_FELT {
-            processors::handle_mint(&self, ctx).await
+            processors::handle_mint(&self, ctx, transaction).await
         } else {
-            processors::handle_transfer(&self, ctx).await
+            processors::handle_transfer(&self, ctx, transaction).await
         }
     }
 }
 
-pub async fn run(ctx: &Event<'_, '_>) -> Result<()> {
+pub async fn run(
+    ctx: &Event<'_, '_>,
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+) -> Result<()> {
     let contract_address = ctx.contract_address();
     let block_number = ctx.block_number();
     let event_data = ctx.data();
@@ -38,14 +45,18 @@ pub async fn run(ctx: &Event<'_, '_>) -> Result<()> {
     let token_id = CairoUint256::new(event_data[2], *event_data.get(3).unwrap_or(&ZERO_FELT));
 
     Erc721Transfer { sender, recipient, token_id, contract_address, block_number }
-        .process(ctx)
+        .process(ctx, transaction)
         .await
 }
 
 mod processors {
     use super::*;
 
-    pub async fn handle_mint(event: &Erc721Transfer, ctx: &Event<'_, '_>) -> Result<()> {
+    pub async fn handle_mint(
+        event: &Erc721Transfer,
+        ctx: &Event<'_, '_>,
+        transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> Result<()> {
         let block_id = BlockId::Number(event.block_number);
         let block_number = i64::try_from(event.block_number).unwrap();
 
@@ -71,7 +82,7 @@ mod processors {
             "#,
             event.contract_address.to_string()
         )
-        .fetch_one(ctx.transaction())
+        .fetch_one(&mut *transaction)
         .await?
         .exists
         .unwrap_or_default();
@@ -95,7 +106,7 @@ mod processors {
                 symbol,
                 block_number
             )
-            .execute(ctx.transaction())
+            .execute(&mut *transaction)
             .await?;
         }
 
@@ -119,7 +130,7 @@ mod processors {
             token_uri,
             i64::try_from(event.block_number).unwrap()
         )
-        .fetch_one(ctx.transaction())
+        .fetch_one(&mut *transaction)
         .await?
         .id;
 
@@ -133,13 +144,17 @@ mod processors {
             event.recipient.to_string(),
             block_number
         )
-        .execute(ctx.transaction())
+        .execute(&mut *transaction)
         .await?;
 
         Ok(())
     }
 
-    pub async fn handle_transfer(event: &Erc721Transfer, ctx: &Event<'_, '_>) -> Result<()> {
+    pub async fn handle_transfer(
+        event: &Erc721Transfer,
+        ctx: &Event<'_, '_>,
+        transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> Result<()> {
         let block_number = i64::try_from(event.block_number).unwrap();
 
         // Find the ERC721 entry with given contract address and id
@@ -156,7 +171,7 @@ mod processors {
             event.token_id.low.to_string(),
             event.token_id.high.to_string(),
         )
-        .fetch_one(ctx.transaction())
+        .fetch_one(&mut *transaction)
         .await?
         .id;
 
@@ -171,7 +186,7 @@ mod processors {
             block_number,
             erc721_id,
         )
-        .execute(ctx.transaction())
+        .execute(&mut *transaction)
         .await?;
 
         // Update owners list
@@ -184,7 +199,7 @@ mod processors {
             event.recipient.to_string(),
             block_number
         )
-        .execute(ctx.transaction())
+        .execute(&mut *transaction)
         .await?;
 
         Ok(())

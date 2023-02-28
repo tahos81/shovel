@@ -17,12 +17,19 @@ pub struct Erc1155TransferSingle {
 
 #[async_trait]
 impl ProcessEvent for Erc1155TransferSingle {
-    async fn process(&mut self, ctx: &Event<'_, '_>) -> Result<()> {
-        todo!()
+    async fn process(
+        &mut self,
+        ctx: &Event<'_, '_>,
+        transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> Result<()> {
+        processors::handle_transfer(&mut self, ctx, transaction).await
     }
 }
 
-pub async fn run(ctx: &Event<'_, '_>) -> Result<()> {
+pub async fn run(
+    ctx: &Event<'_, '_>,
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+) -> Result<()> {
     let contract_address = ctx.contract_address();
     let block_number = ctx.block_number();
     let event_data = ctx.data();
@@ -33,14 +40,18 @@ pub async fn run(ctx: &Event<'_, '_>) -> Result<()> {
     let amount = CairoUint256::new(event_data[5], event_data[6]);
 
     Erc1155TransferSingle { sender, recipient, token_id, amount, contract_address, block_number }
-        .process(ctx)
+        .process(ctx, transaction)
         .await
 }
 
 mod processors {
     use super::*;
 
-    pub async fn handle_transfer(event: &Erc1155TransferSingle, ctx: &Event<'_, '_>) -> Result<()> {
+    pub async fn handle_transfer(
+        event: &Erc1155TransferSingle,
+        ctx: &Event<'_, '_>,
+        transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> Result<()> {
         let block_id = BlockId::Number(event.block_number);
         let block_number = i64::try_from(event.block_number).unwrap();
 
@@ -59,7 +70,7 @@ mod processors {
                 "#,
                 event.contract_address.to_string()
             )
-            .fetch_one(ctx.transaction())
+            .fetch_one(&mut *transaction)
             .await?
             .exists
             .unwrap_or_default();
@@ -84,7 +95,7 @@ mod processors {
                     symbol,
                     block_number
                 )
-                .execute(ctx.transaction())
+                .execute(&mut *transaction)
                 .await?;
             }
         } else {
@@ -103,7 +114,7 @@ mod processors {
                 event.token_id.high.to_string(),
                 event.sender.to_string()
             )
-            .fetch_one(ctx.transaction())
+            .fetch_one(&mut *transaction)
             .await
             .ok();
 
@@ -127,7 +138,7 @@ mod processors {
                         new_balance.high.to_string(),
                         record.id
                     )
-                    .execute(ctx.transaction())
+                    .execute(&mut *transaction)
                     .await?;
                 }
                 None => {
@@ -152,7 +163,7 @@ mod processors {
             event.token_id.high.to_string(),
             event.recipient.to_string()
         )
-        .fetch_one(ctx.transaction())
+        .fetch_one(&mut *transaction)
         .await
         .ok();
 
@@ -178,7 +189,7 @@ mod processors {
                     new_balance.high.to_string(),
                     record.id
                 )
-                .execute(ctx.transaction())
+                .execute(&mut *transaction)
                 .await?;
             }
             None => {

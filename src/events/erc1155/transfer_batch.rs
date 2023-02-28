@@ -17,8 +17,12 @@ pub struct Erc1155TransferBatch {
 
 #[async_trait]
 impl ProcessEvent for Erc1155TransferBatch {
-    async fn process(&mut self, ctx: &Event<'_, '_>) -> Result<()> {
-        for transfer in self.transfers {
+    async fn process(
+        &mut self,
+        ctx: &Event<'_, '_>,
+        transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> Result<()> {
+        for transfer in &self.transfers {
             Erc1155TransferSingle {
                 sender: self.sender,
                 recipient: self.recipient,
@@ -27,7 +31,7 @@ impl ProcessEvent for Erc1155TransferBatch {
                 contract_address: self.contract_address,
                 block_number: self.block_number,
             }
-            .process(ctx)
+            .process(ctx, transaction)
             .await?;
         }
 
@@ -35,9 +39,11 @@ impl ProcessEvent for Erc1155TransferBatch {
     }
 }
 
-pub async fn run(ctx: &Event<'_, '_>) -> Result<()> {
+pub async fn run(
+    ctx: &Event<'_, '_>,
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+) -> Result<()> {
     let contract_address = ctx.contract_address();
-    let block_id = ctx.block_id();
     let block_number = ctx.block_number();
     let event_data = ctx.data();
 
@@ -63,8 +69,8 @@ pub async fn run(ctx: &Event<'_, '_>) -> Result<()> {
         .collect();
 
     Erc1155TransferBatch { sender, recipient, transfers, contract_address, block_number }
-        .process(ctx)
-        .await;
+        .process(ctx, transaction)
+        .await?;
 
     Ok(())
 }

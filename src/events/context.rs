@@ -1,4 +1,3 @@
-use sqlx::{Postgres, Transaction};
 use starknet::{
     core::types::FieldElement,
     providers::jsonrpc::{
@@ -10,16 +9,11 @@ use starknet::{
 pub struct Event<'a, 'b> {
     event: &'b EmittedEvent,
     rpc: &'a JsonRpcClient<HttpTransport>,
-    transaction: &'a mut Transaction<'a, Postgres>,
 }
 
 impl<'a, 'b> Event<'a, 'b> {
-    pub fn new(
-        event: &'b EmittedEvent,
-        rpc: &'a JsonRpcClient<HttpTransport>,
-        transaction: &'a mut Transaction<'_, Postgres>,
-    ) -> Self {
-        Self { event, rpc, transaction }
+    pub fn new(event: &'b EmittedEvent, rpc: &'a JsonRpcClient<HttpTransport>) -> Self {
+        Self { event, rpc }
     }
 
     pub fn contract_address(&self) -> FieldElement {
@@ -40,9 +34,5 @@ impl<'a, 'b> Event<'a, 'b> {
 
     pub fn rpc(&self) -> &JsonRpcClient<HttpTransport> {
         self.rpc
-    }
-
-    pub fn transaction(&self) -> &mut Transaction<'_, Postgres> {
-        self.transaction
     }
 }
