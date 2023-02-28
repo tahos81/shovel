@@ -210,7 +210,7 @@ mod processors {
         let block_id = BlockId::Number(event.block_number);
 
         let token_uri =
-            token::get_erc1155_uri(event.contract_address, &block_id, rpc, event.token_id).await;
+            token::get_erc721_uri(event.contract_address, &block_id, rpc, event.token_id).await;
         let metadata_result = token::get_token_metadata(&token_uri).await;
         let metadata = match metadata_result {
             Ok(metadata) => metadata,
