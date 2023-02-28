@@ -51,6 +51,9 @@ pub async fn run(
 }
 
 mod processors {
+    use crate::rpc::metadata::token::TokenMetadata;
+
+    use super::super::super::super::rpc::metadata::token;
     use super::*;
 
     pub async fn handle_transfer(
@@ -82,6 +85,7 @@ mod processors {
             .unwrap_or_default();
 
             if !contract_metadata_exists {
+                // Query name and symbol, then insert contract metadata
                 let name = contract::get_name(event.contract_address, &block_id, rpc).await;
                 let symbol = contract::get_symbol(event.contract_address, &block_id, rpc).await;
 
@@ -103,6 +107,28 @@ mod processors {
                 .execute(&mut *transaction)
                 .await?;
             }
+
+            let token_metadata_exists = sqlx::query!(
+                r#"
+                    SELECT EXISTS (
+                        SELECT * 
+                        FROM token_metadata
+                        WHERE 
+                            contract_address = $1 AND
+                            contract_type = 'ERC721'
+                    )
+                "#,
+                event.contract_address.to_string()
+            )
+            .fetch_one(&mut *transaction)
+            .await?
+            .exists
+            .unwrap_or_default();
+
+            if !token_metadata_exists {
+                fetch_and_insert_metadata(event, rpc, &mut *transaction).await?;
+            }
+
         } else {
             let balance_record = sqlx::query!(
                 r#"
@@ -218,6 +244,85 @@ mod processors {
                     event.amount.low.to_string(),
                     event.amount.high.to_string(),
                     block_number
+                )
+                .execute(&mut *transaction)
+                .await?;
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn fetch_and_insert_metadata(
+        event: &Erc1155TransferSingle,
+        rpc: &JsonRpcClient<HttpTransport>,
+        transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> Result<()> {
+        let block_id = BlockId::Number(event.block_number);
+
+        let token_uri =
+            token::get_erc1155_uri(event.contract_address, &block_id, rpc, event.token_id).await;
+        let metadata_result = token::get_token_metadata(&token_uri).await;
+        let metadata = match metadata_result {
+            Ok(metadata) => metadata,
+            Err(_) => TokenMetadata::default(),
+        };
+
+        // Insert token_metadata
+        let token_metadata_id = sqlx::query!(
+            r#"
+                INSERT INTO token_metadata(
+                    contract_address,
+                    contract_type,
+                    token_id_low,
+                    token_id_high,
+                    -- Metadata
+                    image,
+                    image_data,
+                    external_url,
+                    description,
+                    name,
+                    background_color,
+                    animation_url,
+                    youtube_url)
+                VALUES($1, 'ERC1155', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                RETURNING id
+            "#,
+            event.contract_address.to_string(),
+            event.token_id.low.to_string(),
+            event.token_id.high.to_string(),
+            metadata.image,
+            metadata.image_data,
+            metadata.external_url,
+            metadata.description,
+            metadata.name,
+            metadata.background_color,
+            metadata.animation_url,
+            metadata.youtube_url
+        )
+        .fetch_one(&mut *transaction)
+        .await?
+        .id;
+
+        // Insert token metadata attributes
+        if let Some(attributes) = metadata.attributes {
+            for attribute in &attributes {
+                sqlx::query!(
+                    r#"
+                    INSERT INTO token_metadata_attributes(
+                        token_metadata_id,
+                        value,
+                        display_type,
+                        trait_type)
+                    VALUES($1, $2, $3, $4)
+                "#,
+                    token_metadata_id,
+                    serde_json::to_string(&attribute.value)
+                        .expect("attribute.value serialize failed"),
+                    serde_json::to_string(&attribute.display_type)
+                        .expect("attribute.display_type serialize failed"),
+                    serde_json::to_string(&attribute.trait_type)
+                        .expect("attribute.trait_type serialize failed")
                 )
                 .execute(&mut *transaction)
                 .await?;

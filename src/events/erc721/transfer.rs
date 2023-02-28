@@ -5,7 +5,13 @@ use crate::{
 };
 use async_trait::async_trait;
 use color_eyre::eyre::Result;
-use starknet::{core::types::FieldElement, providers::jsonrpc::{models::{BlockId, EmittedEvent}, JsonRpcClient, HttpTransport}};
+use starknet::{
+    core::types::FieldElement,
+    providers::jsonrpc::{
+        models::{BlockId, EmittedEvent},
+        HttpTransport, JsonRpcClient,
+    },
+};
 use token::TokenMetadata;
 
 pub struct Erc721Transfer {
@@ -59,15 +65,7 @@ mod processors {
     ) -> Result<()> {
         let block_id = BlockId::Number(event.block_number);
         let block_number = i64::try_from(event.block_number).unwrap();
-
-        let token_uri =
-            token::get_erc721_uri(event.contract_address, &block_id, rpc, event.token_id)
-                .await;
-        let metadata_result = token::get_token_metadata(&token_uri).await;
-        let metadata = match metadata_result {
-            Ok(metadata) => metadata,
-            Err(_) => TokenMetadata::default(),
-        };
+        let token_uri = fetch_and_insert_metadata(event, rpc, &mut *transaction).await?;
 
         // Check contract metadata
         let contract_metadata_exists = sqlx::query!(
@@ -202,5 +200,84 @@ mod processors {
         .await?;
 
         Ok(())
+    }
+
+    async fn fetch_and_insert_metadata(
+        event: &Erc721Transfer,
+        rpc: &JsonRpcClient<HttpTransport>,
+        transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> Result<String> {
+        let block_id = BlockId::Number(event.block_number);
+
+        let token_uri =
+            token::get_erc1155_uri(event.contract_address, &block_id, rpc, event.token_id).await;
+        let metadata_result = token::get_token_metadata(&token_uri).await;
+        let metadata = match metadata_result {
+            Ok(metadata) => metadata,
+            Err(_) => TokenMetadata::default(),
+        };
+
+        // Insert token_metadata
+        let token_metadata_id = sqlx::query!(
+            r#"
+                INSERT INTO token_metadata(
+                    contract_address,
+                    contract_type,
+                    token_id_low,
+                    token_id_high,
+                    -- Metadata
+                    image,
+                    image_data,
+                    external_url,
+                    description,
+                    name,
+                    background_color,
+                    animation_url,
+                    youtube_url)
+                VALUES($1, 'ERC721', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                RETURNING id
+            "#,
+            event.contract_address.to_string(),
+            event.token_id.low.to_string(),
+            event.token_id.high.to_string(),
+            metadata.image,
+            metadata.image_data,
+            metadata.external_url,
+            metadata.description,
+            metadata.name,
+            metadata.background_color,
+            metadata.animation_url,
+            metadata.youtube_url
+        )
+        .fetch_one(&mut *transaction)
+        .await?
+        .id;
+
+        // Insert token metadata attributes
+        if let Some(attributes) = metadata.attributes {
+            for attribute in &attributes {
+                sqlx::query!(
+                    r#"
+                    INSERT INTO token_metadata_attributes(
+                        token_metadata_id,
+                        value,
+                        display_type,
+                        trait_type)
+                    VALUES($1, $2, $3, $4)
+                "#,
+                    token_metadata_id,
+                    serde_json::to_string(&attribute.value)
+                        .expect("attribute.value serialize failed"),
+                    serde_json::to_string(&attribute.display_type)
+                        .expect("attribute.display_type serialize failed"),
+                    serde_json::to_string(&attribute.trait_type)
+                        .expect("attribute.trait_type serialize failed")
+                )
+                .execute(&mut *transaction)
+                .await?;
+            }
+        }
+
+        Ok(token_uri)
     }
 }

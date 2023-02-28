@@ -21,8 +21,17 @@ CREATE TABLE token_metadata(
   external_url TEXT,
   description TEXT,
   name TEXT,
-  attributes TEXT[],
   background_color TEXT,
   animation_url TEXT,
   youtube_url TEXT
+);
+
+CREATE TABLE token_metadata_attributes(
+  id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  token_metadata_id INT NOT NULL,
+  value TEXT,
+  display_type TEXT,
+  trait_type TEXT,
+
+  FOREIGN KEY (token_metadata_id) REFERENCES token_metadata(id) ON DELETE CASCADE
 );
