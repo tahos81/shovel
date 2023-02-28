@@ -1,9 +1,10 @@
-use crate::{
-    common::types::CairoUint256, db::postgres::process::ProcessEvent, events::context::Event,
-};
+use crate::{common::types::CairoUint256, db::postgres::process::ProcessEvent};
 use async_trait::async_trait;
 use color_eyre::eyre::Result;
-use starknet::core::types::FieldElement;
+use starknet::{
+    core::types::FieldElement,
+    providers::jsonrpc::{models::EmittedEvent, HttpTransport, JsonRpcClient},
+};
 
 use super::transfer_single::Erc1155TransferSingle;
 
@@ -19,7 +20,7 @@ pub struct Erc1155TransferBatch {
 impl ProcessEvent for Erc1155TransferBatch {
     async fn process(
         &mut self,
-        ctx: &Event<'_, '_>,
+        rpc: &JsonRpcClient<HttpTransport>,
         transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     ) -> Result<()> {
         for transfer in &self.transfers {
@@ -31,7 +32,7 @@ impl ProcessEvent for Erc1155TransferBatch {
                 contract_address: self.contract_address,
                 block_number: self.block_number,
             }
-            .process(ctx, transaction)
+            .process(rpc, transaction)
             .await?;
         }
 
@@ -40,12 +41,13 @@ impl ProcessEvent for Erc1155TransferBatch {
 }
 
 pub async fn run(
-    ctx: &Event<'_, '_>,
+    event: &EmittedEvent,
+    rpc: &JsonRpcClient<HttpTransport>,
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 ) -> Result<()> {
-    let contract_address = ctx.contract_address();
-    let block_number = ctx.block_number();
-    let event_data = ctx.data();
+    let contract_address = event.from_address;
+    let block_number = event.block_number;
+    let event_data = &event.data;
 
     let sender = event_data[1];
     let recipient = event_data[2];
@@ -69,7 +71,7 @@ pub async fn run(
         .collect();
 
     Erc1155TransferBatch { sender, recipient, transfers, contract_address, block_number }
-        .process(ctx, transaction)
+        .process(rpc, transaction)
         .await?;
 
     Ok(())

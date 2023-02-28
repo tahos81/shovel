@@ -7,11 +7,11 @@ fn main() {
 
     println!("{} {}", file_path, target_path);
 
-    let mut svg_bytes = std::fs::read(file_path).expect("Couldn't read file");
+    let svg_bytes = std::fs::read(file_path).expect("Couldn't read file");
 
     match svg_to_png::svg_to_png(&svg_bytes[..]) {
         Ok(data) => {
-            let png_file = std::fs::write(target_path, data).expect("Failed to write to png");
+            std::fs::write(target_path, data).expect("Failed to write to png");
         }
         Err(e) => {
             dbg!(format!("{:?}", e));

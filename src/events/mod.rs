@@ -3,10 +3,12 @@ pub mod erc1155;
 pub mod erc721;
 
 use color_eyre::eyre::Result;
-use context::Event;
 use starknet::{
     core::types::FieldElement,
-    providers::jsonrpc::{models::EmittedEvent, HttpTransport, JsonRpcClient},
+    providers::jsonrpc::{
+        models::{BlockId, EmittedEvent},
+        HttpTransport, JsonRpcClient,
+    },
 };
 use std::collections::HashSet;
 
@@ -25,31 +27,27 @@ pub async fn handle_transfer_events<'ctx>(
     let mut blacklist: HashSet<FieldElement> = HashSet::new();
 
     for event in &events {
+        let block_id = BlockId::Number(event.block_number);
+        let contract_address = event.from_address;
+
         if blacklist.contains(&event.from_address) {
             continue;
         }
 
-        let event_context = Event::new(event, rpc);
-
         let keys = &event.keys;
         if keys.contains(&TRANSFER_EVENT_KEY) {
             // Both ERC20 and ERC721 use the same event key
-            let is_erc721 = contract::is_erc721(
-                event_context.contract_address(),
-                &event_context.block_id(),
-                rpc,
-            )
-            .await?;
+            let is_erc721 = contract::is_erc721(contract_address, &block_id, rpc).await?;
 
             if is_erc721 {
-                erc721::transfer::run(&event_context, transaction).await?;
+                erc721::transfer::run(event, rpc, transaction).await?;
             } else {
-                blacklist.insert(event_context.contract_address());
+                blacklist.insert(contract_address);
             }
         } else if keys.contains(&TRANSFER_SINGLE_EVENT_KEY) {
-            erc1155::transfer_single::run(&event_context, transaction).await?;
+            erc1155::transfer_single::run(event, rpc, transaction).await?;
         } else if keys.contains(&TRANSFER_BATCH_EVENT_KEY) {
-            erc1155::transfer_batch::run(&event_context, transaction).await?;
+            erc1155::transfer_batch::run(event, rpc, transaction).await?;
         }
     }
 

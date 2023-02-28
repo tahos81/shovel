@@ -1,12 +1,11 @@
 use crate::{
     common::{starknet_constants::ZERO_FELT, types::CairoUint256},
     db::postgres::process::ProcessEvent,
-    events::context::Event,
     rpc::metadata::{contract, token},
 };
 use async_trait::async_trait;
 use color_eyre::eyre::Result;
-use starknet::{core::types::FieldElement, providers::jsonrpc::models::BlockId};
+use starknet::{core::types::FieldElement, providers::jsonrpc::{models::{BlockId, EmittedEvent}, JsonRpcClient, HttpTransport}};
 use token::TokenMetadata;
 
 pub struct Erc721Transfer {
@@ -21,31 +20,32 @@ pub struct Erc721Transfer {
 impl ProcessEvent for Erc721Transfer {
     async fn process(
         &mut self,
-        ctx: &Event<'_, '_>,
+        rpc: &JsonRpcClient<HttpTransport>,
         transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     ) -> Result<()> {
         if self.sender == ZERO_FELT {
-            processors::handle_mint(&self, ctx, transaction).await
+            processors::handle_mint(&self, rpc, transaction).await
         } else {
-            processors::handle_transfer(&self, ctx, transaction).await
+            processors::handle_transfer(&self, transaction).await
         }
     }
 }
 
 pub async fn run(
-    ctx: &Event<'_, '_>,
+    event: &EmittedEvent,
+    rpc: &JsonRpcClient<HttpTransport>,
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 ) -> Result<()> {
-    let contract_address = ctx.contract_address();
-    let block_number = ctx.block_number();
-    let event_data = ctx.data();
+    let contract_address = event.from_address;
+    let block_number = event.block_number;
+    let event_data = &event.data;
 
-    let sender = event_data[0];
+    let sender = event.data[0];
     let recipient = event_data[1];
     let token_id = CairoUint256::new(event_data[2], *event_data.get(3).unwrap_or(&ZERO_FELT));
 
     Erc721Transfer { sender, recipient, token_id, contract_address, block_number }
-        .process(ctx, transaction)
+        .process(rpc, transaction)
         .await
 }
 
@@ -54,14 +54,14 @@ mod processors {
 
     pub async fn handle_mint(
         event: &Erc721Transfer,
-        ctx: &Event<'_, '_>,
+        rpc: &JsonRpcClient<HttpTransport>,
         transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     ) -> Result<()> {
         let block_id = BlockId::Number(event.block_number);
         let block_number = i64::try_from(event.block_number).unwrap();
 
         let token_uri =
-            token::get_erc721_uri(event.contract_address, &block_id, ctx.rpc(), event.token_id)
+            token::get_erc721_uri(event.contract_address, &block_id, rpc, event.token_id)
                 .await;
         let metadata_result = token::get_token_metadata(&token_uri).await;
         let metadata = match metadata_result {
@@ -88,8 +88,8 @@ mod processors {
         .unwrap_or_default();
 
         if !contract_metadata_exists {
-            let name = contract::get_name(event.contract_address, &block_id, ctx.rpc()).await;
-            let symbol = contract::get_symbol(event.contract_address, &block_id, ctx.rpc()).await;
+            let name = contract::get_name(event.contract_address, &block_id, rpc).await;
+            let symbol = contract::get_symbol(event.contract_address, &block_id, rpc).await;
 
             sqlx::query!(
                 r#"
@@ -152,7 +152,6 @@ mod processors {
 
     pub async fn handle_transfer(
         event: &Erc721Transfer,
-        ctx: &Event<'_, '_>,
         transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     ) -> Result<()> {
         let block_number = i64::try_from(event.block_number).unwrap();
