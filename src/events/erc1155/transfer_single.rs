@@ -213,7 +213,9 @@ mod processors {
                     event.amount.low.to_string(),
                     event.amount.high.to_string(),
                     block_number
-                );
+                )
+                .execute(&mut *transaction)
+                .await?;
             }
         }
 
