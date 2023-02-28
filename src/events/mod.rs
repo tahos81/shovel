@@ -10,7 +10,7 @@ use starknet::{
         HttpTransport, JsonRpcClient,
     },
 };
-use std::{collections::HashSet, str::FromStr};
+use std::str::FromStr;
 
 use crate::{
     common::starknet_constants::{
@@ -19,39 +19,68 @@ use crate::{
     rpc::metadata::contract,
 };
 
-pub async fn handle_transfer_events<'ctx>(
-    events: Vec<EmittedEvent>,
-    rpc: &'ctx JsonRpcClient<HttpTransport>,
-    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-) -> Result<()> {
-    let mut blacklist: HashSet<FieldElement> = HashSet::new();
+pub struct EventHandler<'a, 'b> {
+    rpc: &'a JsonRpcClient<HttpTransport>,
+    transaction: &'b mut sqlx::Transaction<'a, sqlx::Postgres>,
+}
 
-    for event in &events {
+impl<'a, 'b> EventHandler<'a, 'b> {
+    pub fn new(
+        rpc: &'a JsonRpcClient<HttpTransport>,
+        transaction: &'b mut sqlx::Transaction<'a, sqlx::Postgres>,
+    ) -> Self {
+        EventHandler { rpc, transaction }
+    }
+
+    pub async fn handle(&mut self, event: &EmittedEvent) -> Result<()> {
         let block_id = BlockId::Number(event.block_number);
         let contract_address = event.from_address;
 
-        if blacklist.contains(&event.from_address) {
-            continue;
+        let blacklisted = sqlx::query!(
+            r#"
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM blacklisted_contracts
+                    WHERE address = $1
+                )
+            "#,
+            contract_address.to_string()
+        )
+        .fetch_one(&mut *self.transaction)
+        .await?
+        .exists
+        .unwrap_or_default();
+
+        if blacklisted {
+            return Ok(());
         }
 
         let keys = &event.keys;
         if keys.contains(&TRANSFER_EVENT_KEY) {
             // Both ERC20 and ERC721 use the same event key
-            let is_erc721 = contract::is_erc721(contract_address, &block_id, rpc).await?;
+            let is_erc721 = contract::is_erc721(contract_address, &block_id, self.rpc).await?;
 
             if is_erc721 {
-                erc721::transfer::run(event, rpc, transaction).await?;
+                erc721::transfer::run(event, self.rpc, &mut *self.transaction).await?;
             } else {
-                blacklist.insert(contract_address);
+                sqlx::query!(
+                    r#"
+                        INSERT INTO blacklisted_contracts(address)
+                        VALUES ($1)
+                    "#,
+                    contract_address.to_string()
+                )
+                .execute(&mut *self.transaction)
+                .await?;
             }
         } else if keys.contains(&TRANSFER_SINGLE_EVENT_KEY) {
-            erc1155::transfer_single::run(event, rpc, transaction).await?;
+            erc1155::transfer_single::run(event, self.rpc, &mut *self.transaction).await?;
         } else if keys.contains(&TRANSFER_BATCH_EVENT_KEY) {
-            erc1155::transfer_batch::run(event, rpc, transaction).await?;
+            erc1155::transfer_batch::run(event, self.rpc, &mut *self.transaction).await?;
         }
-    }
 
-    Ok(())
+        Ok(())
+    }
 }
 
 // TODO: Move to a more suiting folder

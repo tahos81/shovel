@@ -15,8 +15,7 @@ async fn main() -> Result<()> {
 
     let rpc = rpc::connect()?;
 
-    let conn_str =
-        std::env::var("DATABASE_URL").expect("Env var DATABASE_URL is required");
+    let conn_str = std::env::var("DATABASE_URL").expect("Env var DATABASE_URL is required");
     let pool = sqlx::PgPool::connect(&conn_str).await?;
 
     // Drop everythin from tables
@@ -27,13 +26,16 @@ async fn main() -> Result<()> {
     let range = 10;
 
     while start_block < 16000 {
-
         println!("getting events between block {} and {}", start_block, start_block + range);
         let transfer_events = rpc::get_transfer_events::run(start_block, range, &rpc).await?;
         println!("got {} events in total", transfer_events.len());
 
         let mut transaction = pool.begin().await?;
-        events::handle_transfer_events(transfer_events, &rpc, &mut transaction).await?;
+        let mut event_handler = events::EventHandler::new(&rpc, &mut transaction);
+
+        for transfer_event in &transfer_events {
+            event_handler.handle(transfer_event).await?;
+        }
         db::postgres::update_last_synced_block(start_block, &mut transaction).await?;
         transaction.commit().await?;
 
