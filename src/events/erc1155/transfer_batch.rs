@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use color_eyre::eyre::Result;
 use starknet::{
     core::types::FieldElement,
-    providers::jsonrpc::{models::EmittedEvent, HttpTransport, JsonRpcClient},
+    providers::jsonrpc::{models::EmittedEvent},
 };
 
 use super::transfer_single::Erc1155TransferSingle;
