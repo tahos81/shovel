@@ -6,7 +6,7 @@ fn main() {
     let file_path = std::env::args().nth(1).expect("convert.rs /path/to/svg /path/to/png");
     let target_path = std::env::args().nth(2).expect("convert.rs /path/to/svg /path/to/png");
 
-    println!("{} {}", file_path, target_path);
+    println!("{file_path} {target_path}");
 
     let svg_bytes = std::fs::read(file_path).expect("Couldn't read file");
 
@@ -15,7 +15,7 @@ fn main() {
             std::fs::write(target_path, data).expect("Failed to write to png");
         }
         Err(e) => {
-            dbg!(format!("{:?}", e));
+            dbg!(format!("{e:?}"));
         }
     };
 }

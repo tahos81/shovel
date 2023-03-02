@@ -91,7 +91,7 @@ impl Erc721CollectionInterface for Collection<Erc721> {
         session: &mut ClientSession,
     ) -> Result<()> {
         let query = doc! {"erc721_id": {
-            "contract_address": format!("{:#x}", contract_address),
+            "contract_address": format!("{contract_address:#x}"),
             "token_id": {
                 "low": token_id.low.to_string(),
                 "high": token_id.high.to_string()
@@ -100,12 +100,12 @@ impl Erc721CollectionInterface for Collection<Erc721> {
 
         let update = doc! {
             "$set": {
-            "owner": format!("{:#x}", new_owner),
+            "owner": format!("{new_owner:#x}"),
             "last_updated": block_number as i32
             },
             "$push": {
                 "previous_owners": {
-                    "address": format!("{:#x}", old_owner),
+                    "address": format!("{old_owner:#x}"),
                     "block": block_number as i32
                 }
             }
@@ -141,12 +141,12 @@ impl Erc1155CollectionInterface for Collection<Erc1155Balance> {
         session: &mut ClientSession,
     ) -> Result<()> {
         let query = doc! {"erc1155_balance_id": {
-            "contract_address": format!("{:#x}", contract_address),
+            "contract_address": format!("{contract_address:#x}"),
             "token_id": {
                 "low": token_id.low.to_string(),
                 "high": token_id.high.to_string()
             },
-            "owner": format!("{:#x}", address)
+            "owner": format!("{address:#x}")
         }};
 
         let update = doc! {
@@ -176,10 +176,10 @@ impl Erc1155CollectionInterface for Collection<Erc1155Balance> {
         let balance = self
             .find_one_with_session(
                 doc! {
-                    "erc1155_balance_id.contract_address": format!("{:#x}", contract_address),
+                    "erc1155_balance_id.contract_address": format!("{contract_address:#x}"),
                     "erc1155_balance_id.token_id.low": token_id.low.to_string(),
                     "erc1155_balance_id.token_id.high": token_id.high.to_string(),
-                    "erc1155_balance_id.owner": format!("{:#x}", address),
+                    "erc1155_balance_id.owner": format!("{address:#x}"),
                 },
                 None,
                 session,
@@ -210,7 +210,7 @@ impl Erc1155MetadataCollectionInterface for Collection<Erc1155Metadata> {
     ) -> Result<bool> {
         let query = doc! {
             "erc1155_metadata_id": {
-                "contract_address": format!("{:#x}", contract_address),
+                "contract_address": format!("{contract_address:#x}"),
                 "token_id": {
                     "low": token_id.low.to_string(),
                     "high": token_id.high.to_string()
@@ -239,7 +239,7 @@ impl ContractMetadataCollectionInterface for Collection<ContractMetadata> {
         contract_address: FieldElement,
         session: &mut ClientSession,
     ) -> Result<bool> {
-        let query = doc! {"contract_address": format!("{:#x}", contract_address)};
+        let query = doc! {"contract_address": format!("{contract_address:#x}")};
         let result = self.find_one_with_session(query, None, session).await?;
         Ok(result.is_some())
     }

@@ -49,9 +49,9 @@ impl ProcessEvent for Erc721Transfer {
         transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     ) -> Result<()> {
         if self.sender == ZERO_FELT {
-            processors::handle_mint(&self, rpc, transaction).await
+            processors::handle_mint(self, rpc, transaction).await
         } else {
-            processors::handle_transfer(&self, transaction).await
+            processors::handle_transfer(self, transaction).await
         }
     }
 }
@@ -75,7 +75,7 @@ pub async fn run(
 }
 
 mod processors {
-    use super::*;
+    use super::{BlockId, Erc721Transfer, HttpTransport, JsonRpcClient, Result, TokenMetadata, contract, token};
 
     pub async fn handle_mint(
         event: &Erc721Transfer,

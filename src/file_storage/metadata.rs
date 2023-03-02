@@ -34,11 +34,11 @@ pub async fn store_metadata(
             UriType::Http(http_url) => fetch_http_content(http_url).await,
             UriType::Ipfs(ipfs_url) => {
                 let ipfs_hash = ipfs_url.trim_start_matches("ipfs://");
-                let ipfs_url = format!("https://cloudflare-ipfs.com/ipfs/{}", ipfs_hash);
+                let ipfs_url = format!("https://cloudflare-ipfs.com/ipfs/{ipfs_hash}");
                 fetch_http_content(&ipfs_url).await
             }
             UriType::Other(other_url) => {
-                eprintln!("Unknown url {}", other_url);
+                eprintln!("Unknown url {other_url}");
                 None
             }
         };
@@ -55,7 +55,7 @@ pub async fn store_metadata(
         let png_converted = match svg_to_png(svg_bytes) {
             Ok(data) => Some(data),
             Err(e) => {
-                dbg!("SVG conversion failed", format!("{:?}", e));
+                dbg!("SVG conversion failed", format!("{e:?}"));
                 None
             }
         };
@@ -72,11 +72,11 @@ pub async fn store_metadata(
             UriType::Http(http_url) => fetch_http_content(http_url).await,
             UriType::Ipfs(ipfs_url) => {
                 let ipfs_hash = ipfs_url.trim_start_matches("ipfs://");
-                let ipfs_url = format!("https://cloudflare-ipfs.com/ipfs/{}", ipfs_hash);
+                let ipfs_url = format!("https://cloudflare-ipfs.com/ipfs/{ipfs_hash}");
                 fetch_http_content(&ipfs_url).await
             }
             UriType::Other(other_url) => {
-                eprintln!("Unknown url {}", other_url);
+                eprintln!("Unknown url {other_url}");
                 None
             }
         };
@@ -96,7 +96,7 @@ async fn fetch_http_content(url: &str) -> Option<(String, Vec<u8>)> {
     let url = match reqwest::Url::from_str(url) {
         Ok(v) => v,
         _ => {
-            eprintln!("Failed to parse url {}", url);
+            eprintln!("Failed to parse url {url}");
             return None;
         }
     };
@@ -111,17 +111,17 @@ async fn fetch_http_content(url: &str) -> Option<(String, Vec<u8>)> {
     };
 
     if content_length > MAX_CONTENT_LENGTH {
-        dbg!(format!("Content length exceeds max length {}", content_length));
+        dbg!(format!("Content length exceeds max length {content_length}"));
         return None;
     }
 
     // If successful request, get response bytes
-    let url_request = reqwest::get(url).await.map(|response| response.bytes());
+    let url_request = reqwest::get(url).await.map(reqwest::Response::bytes);
 
     match url_request {
         Ok(response) => response.await.ok().map(|v| (content_type, v.to_vec())),
         Err(e) => {
-            dbg!("Couldn't fetch data", format!("{:?}", e));
+            dbg!("Couldn't fetch data", format!("{e:?}"));
             None
         }
     }
@@ -141,7 +141,7 @@ async fn get_content_type_and_length(url: reqwest::Url) -> Option<(String, u32)>
             .and_then(|v| str::parse::<u32>(v).ok());
 
         let content_type =
-            headers.get("content-type").and_then(|v| v.to_str().ok()).map(|v| v.to_string());
+            headers.get("content-type").and_then(|v| v.to_str().ok()).map(std::string::ToString::to_string);
 
         content_type.zip(content_length)
     } else {

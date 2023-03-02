@@ -48,7 +48,7 @@ impl ProcessEvent for Erc1155TransferSingle {
         rpc: &JsonRpcClient<HttpTransport>,
         transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     ) -> Result<()> {
-        processors::handle_transfer(&mut self, rpc, transaction).await
+        processors::handle_transfer(self, rpc, transaction).await
     }
 }
 
@@ -75,7 +75,7 @@ mod processors {
     use crate::rpc::metadata::token::TokenMetadata;
 
     use super::super::super::super::rpc::metadata::token;
-    use super::*;
+    use super::{BlockId, CairoUint256, Erc1155TransferSingle, FieldElement, HttpTransport, JsonRpcClient, Result, contract};
 
     pub async fn handle_transfer(
         event: &Erc1155TransferSingle,

@@ -21,9 +21,9 @@ impl AwsS3Storage {
     #[allow(unused)]
     /// Gets the upload URL for the object
     fn get_url(&self, bucket_name: &str, key: &str) -> String {
-        let region_name = self.client.conf().region().map(|r| r.as_ref()).unwrap_or("us-west-2");
+        let region_name = self.client.conf().region().map_or("us-west-2", std::convert::AsRef::as_ref);
 
-        format!("https://{}.s3.{}.amazonaws.com/{}", bucket_name, region_name, key)
+        format!("https://{bucket_name}.s3.{region_name}.amazonaws.com/{key}")
     }
 
     #[allow(unused)]

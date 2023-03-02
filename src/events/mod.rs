@@ -114,9 +114,9 @@ impl ToString for HexFieldElement {
     }
 }
 
-impl Into<FieldElement> for HexFieldElement {
-    fn into(self) -> FieldElement {
-        self.0
+impl From<HexFieldElement> for FieldElement {
+    fn from(val: HexFieldElement) -> Self {
+        val.0
     }
 }
 
