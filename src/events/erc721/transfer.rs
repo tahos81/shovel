@@ -188,35 +188,63 @@ mod processors {
             event.token_id.high.to_string(),
         )
         .fetch_one(&mut *transaction)
-        .await?
-        .id;
+        .await;
 
-        // Update latest owner
-        sqlx::query!(
-            r#"
+        match erc721_id {
+            Ok(erc721_id) => {
+                let erc721_id = erc721_id.id;
+                // Update latest owner
+                sqlx::query!(
+                    r#"
                 UPDATE erc721_data
                 SET latest_owner = $1, last_updated_block = $2
                 WHERE id = $3
             "#,
-            event.recipient.to_string(),
-            block_number,
-            erc721_id,
-        )
-        .execute(&mut *transaction)
-        .await?;
+                    event.recipient.to_string(),
+                    block_number,
+                    erc721_id,
+                )
+                .execute(&mut *transaction)
+                .await?;
 
-        // Update owners list
-        sqlx::query!(
-            r#"
+                // Update owners list
+                sqlx::query!(
+                    r#"
                 INSERT INTO erc721_owners(erc721_id, owner, block)
                 VALUES($1, $2, $3)
             "#,
-            erc721_id,
-            event.recipient.to_string(),
-            block_number
-        )
-        .execute(&mut *transaction)
-        .await?;
+                    erc721_id,
+                    event.recipient.to_string(),
+                    block_number
+                )
+                .execute(&mut *transaction)
+                .await?;
+            }
+
+            Err(_) => {
+                sqlx::query!(
+                    r#"
+                        INSERT INTO erc721_data(
+                            contract_address,
+                            token_id_low,
+                            token_id_high,
+                            latest_owner,
+                            token_uri,
+                            last_updated_block)
+                        VALUES ($1, $2, $3, $4, $5, $6)
+                        RETURNING id
+                    "#,
+                    event.contract_address.to_string(),
+                    event.token_id.low.to_string(),
+                    event.token_id.high.to_string(),
+                    event.recipient.to_string(),
+                    String::default(),
+                    i64::try_from(event.block_number).unwrap()
+                )
+                .fetch_one(&mut *transaction)
+                .await?;
+            }
+        }
 
         Ok(())
     }

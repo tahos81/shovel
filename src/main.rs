@@ -14,15 +14,13 @@ async fn main() -> Result<()> {
     dotenv().ok();
 
     let rpc = rpc::connect()?;
+    let pool = db::postgres::connect().await?;
 
-    let conn_str = std::env::var("DATABASE_URL").expect("Env var DATABASE_URL is required");
-    let pool = sqlx::PgPool::connect(&conn_str).await?;
-
-    // Drop everythin from tables
+    // Drop everything from tables
     db::postgres::drop_everything(&pool).await?;
 
     //first transfer event is in 1630
-    let mut start_block = db::postgres::last_synced_block(&pool).await?;
+    let mut start_block = db::postgres::last_synced_block(&pool).await.unwrap_or(1630);
     let range = 10;
 
     while start_block < 16000 {
