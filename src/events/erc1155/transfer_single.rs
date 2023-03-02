@@ -1,5 +1,7 @@
 use crate::{
-    common::types::CairoUint256, db::postgres::process::ProcessEvent, events::HexFieldElement,
+    common::types::CairoUint256,
+    db::postgres::process::ProcessEvent,
+    events::{EventHandler, HexFieldElement},
     rpc::metadata::contract,
 };
 use async_trait::async_trait;
@@ -43,39 +45,41 @@ impl Erc1155TransferSingle {
 
 #[async_trait]
 impl ProcessEvent for Erc1155TransferSingle {
-    async fn process(
-        &mut self,
-        rpc: &JsonRpcClient<HttpTransport>,
-        transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    ) -> Result<()> {
-        processors::handle_transfer(self, rpc, transaction).await
+    async fn process(&self, handler: &mut EventHandler<'_, '_>) -> Result<()> {
+        processors::handle_transfer(self, handler.rpc, handler.transaction).await
     }
 }
 
-pub async fn run(
-    event: &EmittedEvent,
-    rpc: &JsonRpcClient<HttpTransport>,
-    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-) -> Result<()> {
-    let contract_address = event.from_address;
-    let block_number = event.block_number;
-    let event_data = &event.data;
+impl From<&EmittedEvent> for Erc1155TransferSingle {
+    fn from(event: &EmittedEvent) -> Self {
+        let contract_address = event.from_address;
+        let block_number = event.block_number;
+        let event_data = &event.data;
 
-    let sender = event_data[1];
-    let recipient = event_data[2];
-    let token_id = CairoUint256::new(event_data[3], event_data[4]);
-    let amount = CairoUint256::new(event_data[5], event_data[6]);
+        let sender = event_data[1];
+        let recipient = event_data[2];
+        let token_id = CairoUint256::new(event_data[3], event_data[4]);
+        let amount = CairoUint256::new(event_data[5], event_data[6]);
 
-    Erc1155TransferSingle::new(sender, recipient, token_id, amount, contract_address, block_number)
-        .process(rpc, transaction)
-        .await
+        Erc1155TransferSingle::new(
+            sender,
+            recipient,
+            token_id,
+            amount,
+            contract_address,
+            block_number,
+        )
+    }
 }
 
 mod processors {
     use crate::rpc::metadata::token::TokenMetadata;
 
     use super::super::super::super::rpc::metadata::token;
-    use super::{BlockId, CairoUint256, Erc1155TransferSingle, FieldElement, HttpTransport, JsonRpcClient, Result, contract};
+    use super::{
+        contract, BlockId, CairoUint256, Erc1155TransferSingle, FieldElement, HttpTransport,
+        JsonRpcClient, Result,
+    };
 
     pub async fn handle_transfer(
         event: &Erc1155TransferSingle,

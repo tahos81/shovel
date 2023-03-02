@@ -16,7 +16,13 @@ use crate::{
     common::starknet_constants::{
         TRANSFER_BATCH_EVENT_KEY, TRANSFER_EVENT_KEY, TRANSFER_SINGLE_EVENT_KEY,
     },
+    db::postgres::process::ProcessEvent,
     rpc::metadata::contract,
+};
+
+use self::{
+    erc1155::{transfer_batch::Erc1155TransferBatch, transfer_single::Erc1155TransferSingle},
+    erc721::transfer::Erc721Transfer,
 };
 
 pub struct EventHandler<'a, 'b> {
@@ -61,7 +67,8 @@ impl<'a, 'b> EventHandler<'a, 'b> {
             let is_erc721 = contract::is_erc721(contract_address, &block_id, self.rpc).await?;
 
             if is_erc721 {
-                erc721::transfer::run(event, self.rpc, &mut *self.transaction).await?;
+                let erc721_transfer = Erc721Transfer::from(event);
+                erc721_transfer.process(self).await?;
             } else {
                 sqlx::query!(
                     r#"
@@ -74,9 +81,11 @@ impl<'a, 'b> EventHandler<'a, 'b> {
                 .await?;
             }
         } else if keys.contains(&TRANSFER_SINGLE_EVENT_KEY) {
-            erc1155::transfer_single::run(event, self.rpc, &mut *self.transaction).await?;
+            let erc1155_transfer_single = Erc1155TransferSingle::from(event);
+            erc1155_transfer_single.process(self).await?;
         } else if keys.contains(&TRANSFER_BATCH_EVENT_KEY) {
-            erc1155::transfer_batch::run(event, self.rpc, &mut *self.transaction).await?;
+            let erc1155_transfer_batch = Erc1155TransferBatch::from(event);
+            erc1155_transfer_batch.process(self).await?;
         }
 
         Ok(())

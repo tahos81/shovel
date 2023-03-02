@@ -1,7 +1,7 @@
 use crate::{
     common::{starknet_constants::ZERO_FELT, types::CairoUint256},
     db::postgres::process::ProcessEvent,
-    events::HexFieldElement,
+    events::{EventHandler, HexFieldElement},
     rpc::metadata::{contract, token},
 };
 use async_trait::async_trait;
@@ -43,39 +43,34 @@ impl Erc721Transfer {
 
 #[async_trait]
 impl ProcessEvent for Erc721Transfer {
-    async fn process(
-        &mut self,
-        rpc: &JsonRpcClient<HttpTransport>,
-        transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    ) -> Result<()> {
+    async fn process(&self, handler: &mut EventHandler<'_, '_>) -> Result<()> {
         if self.sender == ZERO_FELT {
-            processors::handle_mint(self, rpc, transaction).await
+            processors::handle_mint(self, handler.rpc, handler.transaction).await
         } else {
-            processors::handle_transfer(self, transaction).await
+            processors::handle_transfer(self, handler.transaction).await
         }
     }
 }
 
-pub async fn run(
-    event: &EmittedEvent,
-    rpc: &JsonRpcClient<HttpTransport>,
-    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-) -> Result<()> {
-    let contract_address = event.from_address;
-    let block_number = event.block_number;
-    let event_data = &event.data;
+impl From<&EmittedEvent> for Erc721Transfer {
+    fn from(event: &EmittedEvent) -> Self {
+        let contract_address = event.from_address;
+        let block_number = event.block_number;
+        let event_data = &event.data;
 
-    let sender = event.data[0];
-    let recipient = event_data[1];
-    let token_id = CairoUint256::new(event_data[2], *event_data.get(3).unwrap_or(&ZERO_FELT));
+        let sender = event.data[0];
+        let recipient = event_data[1];
+        let token_id = CairoUint256::new(event_data[2], *event_data.get(3).unwrap_or(&ZERO_FELT));
 
-    Erc721Transfer::new(sender, recipient, token_id, contract_address, block_number)
-        .process(rpc, transaction)
-        .await
+        Erc721Transfer::new(sender, recipient, token_id, contract_address, block_number)
+    }
 }
 
 mod processors {
-    use super::{BlockId, Erc721Transfer, HttpTransport, JsonRpcClient, Result, TokenMetadata, contract, token};
+    use super::{
+        contract, token, BlockId, Erc721Transfer, HttpTransport, JsonRpcClient, Result,
+        TokenMetadata,
+    };
 
     pub async fn handle_mint(
         event: &Erc721Transfer,
