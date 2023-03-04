@@ -140,8 +140,10 @@ async fn get_content_type_and_length(url: reqwest::Url) -> Option<(String, u32)>
             .and_then(|v| v.to_str().ok())
             .and_then(|v| str::parse::<u32>(v).ok());
 
-        let content_type =
-            headers.get("content-type").and_then(|v| v.to_str().ok()).map(std::string::ToString::to_string);
+        let content_type = headers
+            .get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .map(std::string::ToString::to_string);
 
         content_type.zip(content_length)
     } else {

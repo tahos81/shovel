@@ -1,0 +1,1 @@
+ALTER TABLE token_metadata ADD COLUMN s3 TEXT;

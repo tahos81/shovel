@@ -1,5 +1,6 @@
 #![warn(clippy::all, clippy::pedantic, clippy::style, rust_2018_idioms)]
 #![allow(clippy::unreadable_literal)]
+mod api;
 mod common;
 mod db;
 mod events;

@@ -27,6 +27,7 @@ aws-sdk-s3 = "0.24.0"
 aws-config = "0.54.1"
 sqlx = { version = "0.6.0" , features = ["runtime-tokio-native-tls", "postgres"] }
 refinery = { version = "0.8.7", features = ["tokio-postgres"] }
+axum = "0.6.10"
 
 [[bin]]
 name="convert"
