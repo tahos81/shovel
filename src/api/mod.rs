@@ -7,6 +7,7 @@ use crate::rpc::metadata::token;
 use axum::routing::post;
 use axum::routing::Router;
 use axum::Json;
+use color_eyre::eyre::Report;
 use reqwest::StatusCode;
 use serde::Deserialize;
 use serde::Serialize;
@@ -16,58 +17,69 @@ use starknet::providers::jsonrpc::models::BlockTag::Latest;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Payload {
-    contract_address: String,
-    token_id_low: String,
-    token_id_high: String,
+    contract_address: FieldElement,
+    token_id_low: FieldElement,
+    token_id_high: FieldElement,
 }
 
-fn get_app() -> Router<()> {
+pub fn get_app() -> Router<()> {
     Router::new().route("/refresh", post(handler))
 }
 
-async fn handler(Json(payload): Json<Payload>) {
-    let rpc = rpc::connect().unwrap();
-    let db = db::postgres::connect().await.unwrap();
+async fn handler(Json(payload): Json<Payload>) -> Result<StatusCode, (StatusCode, String)> {
+    let rpc = rpc::connect().map_err(internal_error)?;
+    let db = db::postgres::connect().await.map_err(internal_report)?;
     let file_storage = s3::connect().await;
-    let contract_address = FieldElement::from_hex_be(&payload.contract_address).unwrap();
+
+    let contract_address = payload.contract_address;
     let token_id_low = payload.token_id_low;
     let token_id_high = payload.token_id_high;
-    let token_id = CairoUint256::new(
-        FieldElement::from_dec_str(&token_id_low).unwrap(),
-        FieldElement::from_dec_str(&token_id_high).unwrap(),
-    );
-    let key = payload.contract_address + &token_id_low + &token_id_high;
-    let uri = token::get_erc721_uri(contract_address, &BlockId::Tag(Latest), &rpc, token_id).await;
-    let metadata = token::get_token_metadata(&uri).await.unwrap();
-    let url = store_metadata(&key, &metadata, &file_storage).await.unwrap();
-    let erc721_id = sqlx::query!(
-        r#"
-        SELECT id
-        FROM erc721_data
-        WHERE
-            contract_address = $1 AND
-            token_id_low = $2 AND
-            token_id_high = $3
-        "#,
-        contract_address.to_string(),
-        token_id_low,
-        token_id_high,
-    )
-    .fetch_one(&db)
-    .await
-    .unwrap();
+    let token_id = CairoUint256::new(token_id_low, token_id_high);
+    let key = contract_address.to_string()
+        + "."
+        + &token_id_low.to_string()
+        + "."
+        + &token_id_high.to_string();
 
-    let erc721_id = erc721_id.id;
+    let uri = token::get_erc721_uri(contract_address, &BlockId::Tag(Latest), &rpc, token_id).await;
+    let metadata = token::get_token_metadata(&uri).await.map_err(internal_report)?;
+
+    let url_result = store_metadata(&key, &metadata, &file_storage).await;
+    let url = match url_result {
+        Some(url) => url,
+        None => {
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, "could not upload to s3".to_string()));
+        }
+    };
+
     sqlx::query!(
         r#"
     UPDATE token_metadata
     SET s3 = $1
-    WHERE id = $2
+    WHERE 
+        contract_address = $2 AND
+        token_id_low = $3 AND
+        token_id_high = $4
 "#,
         url,
-        erc721_id,
+        contract_address.to_string(),
+        token_id_low.to_string(),
+        token_id_high.to_string()
     )
     .execute(&db)
     .await
-    .unwrap();
+    .map_err(internal_error)?;
+
+    Ok(StatusCode::OK)
+}
+
+fn internal_error<E>(err: E) -> (StatusCode, String)
+where
+    E: std::error::Error,
+{
+    (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
+}
+
+fn internal_report(err: Report) -> (StatusCode, String) {
+    (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
 }

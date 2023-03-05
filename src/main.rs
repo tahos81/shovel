@@ -7,6 +7,8 @@ mod events;
 mod file_storage;
 mod rpc;
 
+use std::net::SocketAddr;
+
 use color_eyre::eyre::Result;
 use dotenv::dotenv;
 
@@ -42,6 +44,10 @@ async fn main() -> Result<()> {
 
         start_block += range;
     }
+
+    let app = api::get_app();
+    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    axum::Server::bind(&addr).serve(app.into_make_service()).await?;
 
     Ok(())
 }
