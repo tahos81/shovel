@@ -9,7 +9,7 @@ use db::postgres::process::ProcessEvent;
 use events::{Event, EventBatch};
 use sqlx::{Pool, Postgres};
 use std::{collections::BinaryHeap, sync::Arc};
-use tokio::sync::{mpsc, Mutex, Notify};
+use tokio::sync::{mpsc, Semaphore};
 
 use color_eyre::eyre;
 use dotenv::dotenv;
@@ -19,6 +19,7 @@ use crate::rpc::StarknetRpc;
 const EVENT_CHANNEL_BUFFER_SIZE: usize = 10;
 const DEFAULT_STARTING_BLOCK: u64 = 1630; // First ERC721 transfer event
 const BLOCK_RANGE: u64 = 10;
+const MAX_TASK_COUNT: usize = 5;
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
@@ -44,34 +45,22 @@ async fn main() -> eyre::Result<()> {
     let mut start_block =
         db::postgres::last_synced_block(&pool).await.unwrap_or(DEFAULT_STARTING_BLOCK);
 
-    let MAX_TASK_COUNT: usize = 5;
-    let active_task_count = Arc::new(Mutex::new(0_usize));
-    let active_task_notify = Arc::new(Notify::new());
+    let task_permit = Arc::new(Semaphore::new(MAX_TASK_COUNT));
 
     for batch_id in 0_u64.. {
-        let task_count = active_task_count.clone();
-        let notify = active_task_notify.clone();
+        let task_permit = task_permit.clone();
         let event_tx = event_tx.clone();
 
         let from_block = start_block;
         start_block += BLOCK_RANGE;
 
         tokio::spawn(async move {
+            let _wait = task_permit.acquire().await.expect("Semaphore acquire");
+            println!("[tx] runnning batch_id #{batch_id}");
+
             let pool = (&pool).clone();
             let rpc = rpc.clone();
             let handler = events::EventHandler::new(rpc.inner(), pool);
-
-            let mut task_count_before = task_count.lock().await;
-
-            println!("[tx] task count: {}", *task_count_before);
-
-            if *task_count_before >= MAX_TASK_COUNT {
-                // Max task count reached, wait for other tasks to finish
-                notify.notified().await;
-            }
-
-            *task_count_before += 1;
-            drop(task_count_before);
 
             println!("[tx] reading between {} - {}", from_block, from_block + BLOCK_RANGE);
             match rpc.get_transfer_events(from_block, BLOCK_RANGE).await {
@@ -81,18 +70,8 @@ async fn main() -> eyre::Result<()> {
                     println!("[tx] sent batch #{batch_id} to the channel");
                 }
                 Err(e) => {
-                    println!("{:?}", e);
+                    println!("[tx] failure: {:?}", e);
                 }
-            }
-
-            println!("[tx] failure");
-
-            let mut task_count_after = task_count.lock().await;
-            *task_count_after -= 1;
-
-            if *task_count_after < MAX_TASK_COUNT {
-                // Current task is done, notify a new one
-                notify.notify_one();
             }
 
             eyre::Result::<(), eyre::ErrReport>::Ok(())
@@ -118,9 +97,11 @@ async fn process_event_diffs(
 
         while batch_id_heap.peek() == Some(latest_batch_id + 1).as_ref() {
             // Process and pop pending block
+            let search_id = batch_id_heap.pop().unwrap();
+            println!("Searching for id #{search_id}");
             let pending_block_idx = batches
                 .iter()
-                .position(|item| item.batch_id() == batch_id_heap.pop().unwrap())
+                .position(|item| item.batch_id() == search_id)
                 .unwrap();
             let pending_block = batches.remove(pending_block_idx);
 
