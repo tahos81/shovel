@@ -2,7 +2,7 @@ pub mod erc1155;
 pub mod erc721;
 
 use async_trait::async_trait;
-use color_eyre::eyre::Result;
+use color_eyre::eyre;
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Postgres};
 use starknet::{
@@ -18,7 +18,6 @@ use crate::{
     common::starknet_constants::{
         TRANSFER_BATCH_EVENT_KEY, TRANSFER_EVENT_KEY, TRANSFER_SINGLE_EVENT_KEY,
     },
-    db::postgres::process::ProcessEvent,
     rpc::metadata::contract,
 };
 
@@ -29,26 +28,38 @@ use self::{
 
 #[async_trait]
 pub trait IntoEventDiff {
-    async fn into_event_diff(self) -> EventDiff;
+    async fn into_event_diff(self, handler: &EventHandler<'_>) -> EventDiff;
 }
 
 pub struct Erc721Diff {
     contract_address: FieldElement,
     token_id: FieldElement,
     new_owner: String,
-    timestamp: u64,
+    block_number: u64,
 }
 
-pub struct Erc1155Diff {
-    contract_address: FieldElement,
-    token_id: FieldElement,
-    // ( positive, amount )
-    balance_change: (bool, FieldElement),
+pub struct Erc1155SingleDiff {
+    contract_address: String,
+    sender: String,
+    recipient: String,
+    token_id: (String, String),
+    amount: (String, String),
+    block_number: u64,
+}
+
+pub struct Erc1155BatchDiff {
+    contract_address: String,
+    sender: String,
+    recipient: String,
+    token_ids: Vec<(String, String)>,
+    amounts: Vec<(String, String)>,
+    block_number: u64,
 }
 
 pub enum EventDiff {
     Erc721(Erc721Diff),
-    Erc1155(Erc1155Diff),
+    Erc1155Single(Erc1155SingleDiff),
+    Erc1155Batch(Erc1155BatchDiff),
 }
 
 pub struct BlockDiff {
@@ -84,7 +95,7 @@ impl<'a> EventHandler<'a> {
         &mut self,
         batch_id: u64,
         events: &[EmittedEvent],
-    ) -> Result<BlockDiff> {
+    ) -> eyre::Result<BlockDiff> {
         let mut event_diffs = Vec::<EventDiff>::new();
 
         for event in events {
@@ -97,7 +108,7 @@ impl<'a> EventHandler<'a> {
         Ok(BlockDiff::new(batch_id, event_diffs))
     }
 
-    pub async fn diff_from_event(&mut self, event: &EmittedEvent) -> Result<EventDiff> {
+    pub async fn diff_from_event(&mut self, event: &EmittedEvent) -> eyre::Result<EventDiff> {
         let block_id = BlockId::Number(event.block_number);
         let contract_address = event.from_address;
 
@@ -117,7 +128,7 @@ impl<'a> EventHandler<'a> {
         .unwrap_or_default();
 
         if blacklisted {
-            color_eyre::eyre::bail!("Contract blacklisted")
+            eyre::bail!("Contract blacklisted")
         }
 
         let keys = &event.keys;
@@ -128,8 +139,7 @@ impl<'a> EventHandler<'a> {
                 let is_erc721 = contract::is_erc721(contract_address, &block_id, self.rpc).await?;
 
                 if is_erc721 {
-                    let erc721_transfer = Erc721Transfer::from(event);
-                    erc721_transfer.process(self).await?;
+                    Erc721Transfer::from(event).into_event_diff(&self).await?
                 } else {
                     // Blacklist the non-ERC721 token
                     sqlx::query!(
@@ -142,73 +152,22 @@ impl<'a> EventHandler<'a> {
                     )
                     .execute(&self.pool)
                     .await?;
+
+                    eyre::bail!("No matching event")
                 }
             }
             [&TRANSFER_SINGLE_EVENT_KEY, ..] => {
-                todo!()
+                Erc1155TransferSingle::from(event).into_event_diff(&self).await?
             }
             [&TRANSFER_BATCH_EVENT_KEY, ..] => {
-                todo!()
+                Erc1155TransferBatch::from(event).into_event_diff(&self).await?
             }
-            _ => {}
-        }
-    }
-
-    pub async fn handle(&mut self, event: &EmittedEvent) -> Result<()> {
-        let block_id = BlockId::Number(event.block_number);
-        let contract_address = event.from_address;
-
-        let blacklisted = sqlx::query!(
-            r#"
-                SELECT EXISTS (
-                    SELECT 1
-                    FROM blacklisted_contracts
-                    WHERE address = $1
-                )
-            "#,
-            contract_address.to_string()
-        )
-        .fetch_one(&mut *self.transaction)
-        .await?
-        .exists
-        .unwrap_or_default();
-
-        if blacklisted {
-            return Ok(());
-        }
-
-        let keys = &event.keys;
-        if keys.contains(&TRANSFER_EVENT_KEY) {
-            // Both ERC20 and ERC721 use the same event key
-            let is_erc721 = contract::is_erc721(contract_address, &block_id, self.rpc).await?;
-
-            if is_erc721 {
-                let erc721_transfer = Erc721Transfer::from(event);
-                erc721_transfer.process(self).await?;
-            } else {
-                sqlx::query!(
-                    r#"
-                        INSERT INTO blacklisted_contracts(address)
-                        VALUES ($1)
-                    "#,
-                    contract_address.to_string()
-                )
-                .execute(&mut *self.transaction)
-                .await?;
+            _ => {
+                eyre::bail!("No matching event")
             }
-        } else if keys.contains(&TRANSFER_SINGLE_EVENT_KEY) {
-            let erc1155_transfer_single = Erc1155TransferSingle::from(event);
-            erc1155_transfer_single.process(self).await?;
-        } else if keys.contains(&TRANSFER_BATCH_EVENT_KEY) {
-            let erc1155_transfer_batch = Erc1155TransferBatch::from(event);
-            erc1155_transfer_batch.process(self).await?;
         }
-
-        Ok(())
     }
 }
-
-// TODO: Move to a more suiting folder
 
 #[derive(Debug)]
 pub struct HexFieldElement(FieldElement);
