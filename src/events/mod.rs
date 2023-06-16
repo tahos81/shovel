@@ -51,8 +51,7 @@ pub struct Erc1155BatchDiff {
     contract_address: String,
     sender: String,
     recipient: String,
-    token_ids: Vec<(String, String)>,
-    amounts: Vec<(String, String)>,
+    transfers: Vec<((String, String), (String, String))>,
     block_number: u64,
 }
 

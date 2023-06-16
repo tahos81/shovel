@@ -1,6 +1,6 @@
 use crate::{
     common::types::CairoUint256,
-    events::{EventDiff, EventHandler, HexFieldElement, IntoEventDiff},
+    events::{EventHandler, HexFieldElement, IntoEventDiff, Erc1155SingleDiff},
     rpc::metadata::contract,
 };
 use async_trait::async_trait;
@@ -44,7 +44,7 @@ impl Erc1155TransferSingle {
 
 #[async_trait]
 impl IntoEventDiff for Erc1155TransferSingle {
-    async fn into_event_diff(self, handler: &EventHandler<'_>) -> eyre::Result<EventDiff> {
+    async fn into_event_diff(self, handler: &EventHandler<'_>) -> eyre::Result<Erc1155SingleDiff> {
         processors::get_diff(&self, handler.rpc, handler.pool)
     }
 }
