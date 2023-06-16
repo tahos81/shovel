@@ -1,13 +1,7 @@
-use crate::{
-    common::types::CairoUint256,
-    events::{Erc1155BatchDiff, Erc1155SingleDiff, EventHandler, HexFieldElement, IntoEventDiff},
-};
-use async_trait::async_trait;
-use color_eyre::eyre;
+use crate::{common::types::CairoUint256, events::HexFieldElement};
 use starknet::{core::types::FieldElement, providers::jsonrpc::models::EmittedEvent};
 
-use super::transfer_single::Erc1155TransferSingle;
-
+#[derive(Debug, Clone)]
 pub struct Erc1155TransferBatch {
     pub sender: FieldElement,
     pub recipient: FieldElement,
@@ -31,39 +25,6 @@ impl Erc1155TransferBatch {
             contract_address: HexFieldElement(contract_address),
             block_number,
         }
-    }
-}
-
-#[async_trait]
-impl IntoEventDiff for Erc1155TransferBatch {
-    async fn into_event_diff(self, handler: &EventHandler<'_>) -> eyre::Result<Erc1155BatchDiff> {
-        let transfers: Vec<(String, String), (String, String)> = Vec::new();
-
-        for transfer in &self.transfers {
-            let diff: Erc1155SingleDiff = Erc1155TransferSingle::new(
-                self.sender,
-                self.recipient,
-                transfer.0,
-                transfer.1,
-                self.contract_address.0,
-                self.block_number,
-            )
-            .into_event_diff(handler)
-            .await;
-
-            let token_id = (transfer.0.low.to_string(), transfer.0.high.to_string());
-            let amount = (transfer.1.low.to_string(), transfer.1.high.to_string());
-
-            transfers.push((token_id, amount));
-        }
-
-        Ok(Erc1155BatchDiff {
-            contract_address: self.contract_address.to_string(),
-            sender: self.sender,
-            recipient: self.recipient,
-            transfers,
-            block_number: self.block_number,
-        })
     }
 }
 
@@ -95,5 +56,42 @@ impl From<&EmittedEvent> for Erc1155TransferBatch {
             .collect();
 
         Erc1155TransferBatch::new(sender, recipient, transfers, contract_address, block_number)
+    }
+}
+
+pub mod process_events {
+    use async_trait::async_trait;
+    use color_eyre::eyre;
+    use starknet::providers::jsonrpc::{HttpTransport, JsonRpcClient};
+
+    use crate::{
+        db::postgres::process::ProcessEvent,
+        events::erc1155::transfer_single::Erc1155TransferSingle,
+    };
+
+    use super::Erc1155TransferBatch;
+
+    #[async_trait]
+    impl ProcessEvent for Erc1155TransferBatch {
+        async fn process(
+            &self,
+            rpc: &'static JsonRpcClient<HttpTransport>,
+            transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        ) -> eyre::Result<()> {
+            for transfer in &self.transfers {
+                Erc1155TransferSingle::new(
+                    self.sender,
+                    self.recipient,
+                    transfer.0,
+                    transfer.1,
+                    self.contract_address.0,
+                    self.block_number,
+                )
+                .process(rpc, transaction)
+                .await?;
+            }
+
+            Ok(())
+        }
     }
 }
