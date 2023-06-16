@@ -1,11 +1,10 @@
 use crate::{
-    common::{starknet_constants::ZERO_FELT, types::CairoUint256},
-    db::postgres::process::ProcessEvent,
-    events::{EventHandler, HexFieldElement},
+    common::{types::CairoUint256},
+    events::{EventDiff, EventHandler, HexFieldElement, IntoEventDiff},
     rpc::metadata::{contract, token},
 };
 use async_trait::async_trait;
-use color_eyre::eyre::Result;
+use color_eyre::eyre;
 use starknet::{
     core::types::FieldElement,
     providers::jsonrpc::{
@@ -42,13 +41,9 @@ impl Erc721Transfer {
 }
 
 #[async_trait]
-impl ProcessEvent for Erc721Transfer {
-    async fn process(&self, handler: &mut EventHandler<'_, '_>) -> Result<()> {
-        if self.sender == ZERO_FELT {
-            processors::handle_mint(self, handler.rpc, handler.transaction).await
-        } else {
-            processors::handle_transfer(self, handler.transaction).await
-        }
+impl IntoEventDiff for Erc721Transfer {
+    async fn into_event_diff(self, handler: &EventHandler<'_>) -> eyre::Result<EventDiff> {
+        processors::get_diff(&self, handler.rpc, handler.pool)
     }
 }
 
@@ -60,26 +55,30 @@ impl From<&EmittedEvent> for Erc721Transfer {
 
         let sender = event.data[0];
         let recipient = event_data[1];
-        let token_id = CairoUint256::new(event_data[2], *event_data.get(3).unwrap_or(&ZERO_FELT));
+        let token_id =
+            CairoUint256::new(event_data[2], *event_data.get(3).unwrap_or(&FieldElement::ZERO));
 
         Erc721Transfer::new(sender, recipient, token_id, contract_address, block_number)
     }
 }
 
 mod processors {
+    use sqlx::{Pool, Postgres};
+
+    use crate::events::Erc721Diff;
+
     use super::{
-        contract, token, BlockId, Erc721Transfer, HttpTransport, JsonRpcClient, Result,
+        contract, eyre, token, BlockId, Erc721Transfer, EventDiff, HttpTransport, JsonRpcClient,
         TokenMetadata,
     };
 
-    pub async fn handle_mint(
+    pub async fn get_diff(
         event: &Erc721Transfer,
         rpc: &JsonRpcClient<HttpTransport>,
-        transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    ) -> Result<()> {
+        pool: &Pool<Postgres>,
+    ) -> eyre::Result<EventDiff> {
         let block_id = BlockId::Number(event.block_number);
-        let block_number = i64::try_from(event.block_number).unwrap();
-        let token_uri = fetch_and_insert_metadata(event, rpc, &mut *transaction).await?;
+        let token_uri = fetch_and_insert_metadata(event, rpc, &pool).await?;
 
         // Check contract metadata
         let contract_metadata_exists = sqlx::query!(
@@ -94,7 +93,7 @@ mod processors {
             "#,
             event.contract_address.to_string()
         )
-        .fetch_one(&mut *transaction)
+        .fetch_one(&pool)
         .await?
         .exists
         .unwrap_or_default();
@@ -116,139 +115,25 @@ mod processors {
                 event.contract_address.to_string(),
                 name,
                 symbol,
-                block_number
+                event.block_number
             )
-            .execute(&mut *transaction)
+            .execute(&pool)
             .await?;
         }
 
-        // Insert Erc721 data
-        let inserted_id = sqlx::query!(
-            r#"
-                INSERT INTO erc721_data(
-                    contract_address,
-                    token_id_low,
-                    token_id_high,
-                    latest_owner,
-                    token_uri,
-                    last_updated_block)
-                VALUES ($1, $2, $3, $4, $5, $6)
-                RETURNING id
-            "#,
-            event.contract_address.to_string(),
-            event.token_id.low.to_string(),
-            event.token_id.high.to_string(),
-            event.recipient.to_string(),
-            token_uri,
-            i64::try_from(event.block_number).unwrap()
-        )
-        .fetch_one(&mut *transaction)
-        .await?
-        .id;
-
-        // Add address to owners
-        sqlx::query!(
-            r#"
-                INSERT INTO erc721_owners(erc721_id, owner, block)
-                VALUES($1, $2, $3)
-            "#,
-            inserted_id,
-            event.recipient.to_string(),
-            block_number
-        )
-        .execute(&mut *transaction)
-        .await?;
-
-        Ok(())
-    }
-
-    pub async fn handle_transfer(
-        event: &Erc721Transfer,
-        transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    ) -> Result<()> {
-        let block_number = i64::try_from(event.block_number).unwrap();
-
-        // Find the ERC721 entry with given contract address and id
-        let erc721_id = sqlx::query!(
-            r#"
-            SELECT id
-            FROM erc721_data
-            WHERE
-                contract_address = $1 AND
-                token_id_low = $2 AND
-                token_id_high = $3
-            "#,
-            event.contract_address.to_string(),
-            event.token_id.low.to_string(),
-            event.token_id.high.to_string(),
-        )
-        .fetch_one(&mut *transaction)
-        .await;
-
-        match erc721_id {
-            Ok(erc721_id) => {
-                let erc721_id = erc721_id.id;
-                // Update latest owner
-                sqlx::query!(
-                    r#"
-                UPDATE erc721_data
-                SET latest_owner = $1, last_updated_block = $2
-                WHERE id = $3
-            "#,
-                    event.recipient.to_string(),
-                    block_number,
-                    erc721_id,
-                )
-                .execute(&mut *transaction)
-                .await?;
-
-                // Update owners list
-                sqlx::query!(
-                    r#"
-                INSERT INTO erc721_owners(erc721_id, owner, block)
-                VALUES($1, $2, $3)
-            "#,
-                    erc721_id,
-                    event.recipient.to_string(),
-                    block_number
-                )
-                .execute(&mut *transaction)
-                .await?;
-            }
-
-            Err(_) => {
-                sqlx::query!(
-                    r#"
-                        INSERT INTO erc721_data(
-                            contract_address,
-                            token_id_low,
-                            token_id_high,
-                            latest_owner,
-                            token_uri,
-                            last_updated_block)
-                        VALUES ($1, $2, $3, $4, $5, $6)
-                        RETURNING id
-                    "#,
-                    event.contract_address.to_string(),
-                    event.token_id.low.to_string(),
-                    event.token_id.high.to_string(),
-                    event.recipient.to_string(),
-                    String::default(),
-                    i64::try_from(event.block_number).unwrap()
-                )
-                .fetch_one(&mut *transaction)
-                .await?;
-            }
-        }
-
-        Ok(())
+        Ok(Erc721Diff {
+            contract_address: event.contract_address.to_string(),
+            token_id: (event.token_id.low.to_string(), event.token_id.high.to_string()),
+            new_owner: event.recipient.to_string(),
+            block_number: event.block_number,
+        })
     }
 
     async fn fetch_and_insert_metadata(
         event: &Erc721Transfer,
         rpc: &JsonRpcClient<HttpTransport>,
-        transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    ) -> Result<String> {
+        pool: &Pool<Postgres>,
+    ) -> eyre::Result<String> {
         let block_id = BlockId::Number(event.block_number);
 
         let token_uri =
@@ -291,7 +176,7 @@ mod processors {
             metadata.animation_url,
             metadata.youtube_url
         )
-        .fetch_one(&mut *transaction)
+        .fetch_one(&pool)
         .await?
         .id;
 
@@ -315,7 +200,7 @@ mod processors {
                     serde_json::to_string(&attribute.trait_type)
                         .expect("attribute.trait_type serialize failed")
                 )
-                .execute(&mut *transaction)
+                .execute(&pool)
                 .await?;
             }
         }
