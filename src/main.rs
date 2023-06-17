@@ -9,17 +9,21 @@ use db::postgres::process::ProcessEvent;
 use events::{Event, EventBatch};
 use sqlx::{Pool, Postgres};
 use std::{cmp::Reverse, collections::BinaryHeap, sync::Arc};
-use tokio::sync::{mpsc, Semaphore};
+use tokio::sync::{mpsc, Mutex};
 
 use color_eyre::eyre;
 use dotenv::dotenv;
 
 use crate::rpc::StarknetRpc;
 
-const EVENT_CHANNEL_BUFFER_SIZE: usize = 10;
-const DEFAULT_STARTING_BLOCK: u64 = 1630; // First ERC721 transfer event
+// Initial size of the Vec that is going to hold EventCache's accumulated from
+// different tasks until they are executed
+const EVENT_CHANNEL_BUFFER_SIZE: usize = 20;
+// Default starting block 1630 is around the first ERC721 Transfer event
+const DEFAULT_STARTING_BLOCK: u64 = 1630; 
 const BLOCK_RANGE: u64 = 10;
-const MAX_TASK_COUNT: usize = 3;
+// Number of concurrent tasks
+const MAX_TASK_COUNT: u64 = 5;
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
@@ -40,46 +44,88 @@ async fn main() -> eyre::Result<()> {
     // Spawn the task that'll read each event_diff message and save them to the database
     tokio::spawn(async move { write_events(event_rx, (&rpc).clone(), (&pool).clone()).await });
 
-    let mut start_block =
+    let start_block =
         db::postgres::last_synced_block(&pool).await.unwrap_or(DEFAULT_STARTING_BLOCK);
+    let batch_id = Arc::new(Mutex::new(0_u64));
+    let active_task_count = Arc::new(Mutex::new(0_u64));
 
-    let task_permit = Arc::new(Semaphore::new(MAX_TASK_COUNT));
+    loop {
+        let batch_id = batch_id.clone();
 
-    for batch_id in 0_u64.. {
-        let task_permit = task_permit.clone();
+        // Before spawning a task check the active task count and make sure
+        // that we don't have too many tasks at once
+        let task_count_check = active_task_count.clone();
+        let task_count_check = task_count_check.lock().await;
+        if *task_count_check >= MAX_TASK_COUNT {
+            continue;
+        }
+
+        let task_count = active_task_count.clone();
         let event_tx = event_tx.clone();
 
-        let from_block = start_block;
-        start_block += BLOCK_RANGE;
-
         tokio::spawn(async move {
-            let _permit = task_permit.acquire().await.expect("Semaphore acquire");
-            println!(
-                "[tx-{}] reading between {}-{}",
-                batch_id,
-                from_block,
-                from_block + BLOCK_RANGE
-            );
+            // Before each task, lock the task count and learn about how many
+            // tasks are there. In order for other tasks to have this information
+            // unlock it (by dropping) immediately.
+            let mut task_count_before = task_count.lock().await;
+            let current_task_count = *task_count_before;
 
+            // If there are tasks more than or equal to MAX_TASK_COUNT, wait to
+            // get notified.
+            if current_task_count >= MAX_TASK_COUNT {
+                // Max task count reached, wait for other tasks to finish
+                // println!("[tx] task limit reached, waiting, ({})", current_task_count);
+                // drop(task_count_before);
+                // notify.notified().await;
+                return Ok(());
+                // println!("[tx] notified");
+            } else {
+                // Lock the task count briefly and increment it
+                // let mut task_count_before = task_count.lock().await;
+                // println!("[tx] spawned with task_count {}", *task_count_before);
+                *task_count_before += 1;
+                drop(task_count_before);
+            }
+
+            // Since we started running the task, increment batch id as well
+            let mut batch_id = batch_id.lock().await;
+            let current_batch_id = *batch_id;
+            *batch_id += 1;
+            drop(batch_id); // Again, drop it so that we don't block anything
+
+            let from_block = start_block + BLOCK_RANGE * current_batch_id;
+            println!(
+                "[tx] reading between {}-{}, batch id: {}",
+                from_block,
+                from_block + BLOCK_RANGE,
+                current_batch_id,
+            );
             let pool = (&pool).clone();
             let rpc = rpc.clone();
             let handler = events::EventHandler::new(rpc.inner(), pool);
             match rpc.get_transfer_events(from_block, BLOCK_RANGE).await {
                 Ok(transfer_events) => {
-                    let block_diff = handler.read_events(batch_id, &transfer_events).await?;
-                    event_tx.send(block_diff).await?;
-                    println!("[tx-{}] sent to the channel", batch_id);
+                    let batch = handler.read_events(current_batch_id, &transfer_events).await?;
+                    event_tx.send(batch).await?;
+                    println!("[tx-{}] sent to the channel", current_batch_id);
                 }
                 Err(e) => {
-                    println!("[tx-{}] failure: {:?}", batch_id, e);
+                    println!("[tx-{}] failure: {:?}", current_batch_id, e);
+                    // When there's an error we don't want to brick rx task,
+                    // so send an empty message. Ideally, we shouldn't error unless
+                    // something critical happens
+                    // TODO: Increase error tolerance of `EventHandler::read_events`
+                    event_tx.send(EventBatch::new(current_batch_id, Vec::new())).await?;
                 }
             }
+
+            // Lock the task count again and decrement it
+            let mut task_count_after = task_count.lock().await;
+            *task_count_after -= 1;
+
             eyre::Result::<(), eyre::ErrReport>::Ok(())
         });
     }
-
-    println!("Exiting for some reason");
-    Ok(())
 }
 
 /// Reads from the `EventBatch` receiver and writes the events to the database
@@ -89,7 +135,7 @@ async fn main() -> eyre::Result<()> {
 /// from multiple event handler events.
 ///
 /// In order for this mechanism to work properly it should work faster than the
-/// event handler threads. Considering most of the performance bottleneck is
+/// event handler tasks. Considering most of the performance bottleneck is
 /// blockchain reads, this function and `ProcessEvent` implementations should do
 /// the least amount of blockchain reads
 ///
@@ -110,18 +156,18 @@ async fn write_events(
     let mut batches = Vec::<EventBatch>::with_capacity(EVENT_CHANNEL_BUFFER_SIZE);
 
     while let Some(batch) = event_rx.recv().await {
-        println!("[rx] got a new batch #{}, latest: #{}", batch.batch_id(), latest_batch_id);
+        println!("[rx] got a new batch {}, latest: {}", batch.batch_id(), latest_batch_id);
         batch_id_heap.push(Reverse(batch.batch_id()));
         batches.push(batch);
 
         while batch_id_heap.peek() == Some(Reverse(latest_batch_id)).as_ref() {
             // Process and pop pending block
             let search_id = batch_id_heap.pop().unwrap();
-            println!("[rx] Searching for id #{:?}", search_id.0);
             let pending_batch_idx =
                 batches.iter().position(|item| item.batch_id() == search_id.0).unwrap();
             let pending_batch = batches.remove(pending_batch_idx);
 
+            println!("[rx] Writing id #{:?} to DB", search_id.0);
             let mut transaction = pool.begin().await?;
 
             for event in pending_batch.into_events() {
@@ -146,8 +192,6 @@ async fn write_events(
             transaction.commit().await?;
         }
     }
-
-    println!("[rx] exit??");
 
     Ok(())
 }
