@@ -28,7 +28,11 @@ impl StarknetRpc {
         &self.0
     }
 
-    pub async fn get_transfer_events(&self, start_block: u64, range: u64) -> Result<Vec<EmittedEvent>> {
+    pub async fn get_transfer_events(
+        &self,
+        start_block: u64,
+        range: u64,
+    ) -> Result<Vec<EmittedEvent>> {
         let keys: Vec<FieldElement> =
             Vec::from([TRANSFER_EVENT_KEY, TRANSFER_SINGLE_EVENT_KEY, TRANSFER_BATCH_EVENT_KEY]);
 
@@ -49,7 +53,7 @@ impl StarknetRpc {
             get_events_resp =
                 self.0.get_events(transfer_filter.clone(), continuation_token, chunk_size).await?;
 
-            println!("got {} events", get_events_resp.events.len());
+            println!("[rpc] got {} events", get_events_resp.events.len());
             events.append(&mut get_events_resp.events);
             continuation_token = get_events_resp.continuation_token;
 
@@ -58,10 +62,4 @@ impl StarknetRpc {
             }
         }
     }
-}
-
-pub fn connect() -> Result<JsonRpcClient<HttpTransport>, ConfigError> {
-    let rpc_url = env::var("STARKNET_MAINNET_RPC")?;
-    let parsed_url = Url::parse(&rpc_url)?;
-    Ok(JsonRpcClient::new(HttpTransport::new(parsed_url)))
 }
