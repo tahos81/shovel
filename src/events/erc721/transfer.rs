@@ -68,8 +68,10 @@ pub mod process_event {
             transaction: &mut Transaction<'_, Postgres>,
         ) -> eyre::Result<()> {
             if self.sender == FieldElement::ZERO {
+                println!("[erc721] processing mint");
                 self::process_mint(&self, rpc, transaction).await
             } else {
+                println!("[erc721] processing transfer");
                 self::process_transfer(&self, transaction).await
             }
         }

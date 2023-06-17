@@ -77,7 +77,9 @@ impl<'a> EventHandler<'a> {
         for event in events {
             match self.read_event(event).await {
                 Ok(diff) => event_diffs.push(diff),
-                Err(e) => eprintln!("{:?}", e),
+                Err(_) => {
+                    // eprintln!("{:?}", e)
+                },
             }
         }
 

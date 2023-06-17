@@ -23,7 +23,7 @@ const EVENT_CHANNEL_BUFFER_SIZE: usize = 20;
 const DEFAULT_STARTING_BLOCK: u64 = 1630; 
 const BLOCK_RANGE: u64 = 10;
 // Number of concurrent tasks
-const MAX_TASK_COUNT: u64 = 5;
+const MAX_TASK_COUNT: u64 = 1;
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
@@ -44,8 +44,8 @@ async fn main() -> eyre::Result<()> {
     // Spawn the task that'll read each event_diff message and save them to the database
     tokio::spawn(async move { write_events(event_rx, (&rpc).clone(), (&pool).clone()).await });
 
-    let start_block =
-        db::postgres::last_synced_block(&pool).await.unwrap_or(DEFAULT_STARTING_BLOCK);
+    let start_block = 70000;
+        // db::postgres::last_synced_block(&pool).await.unwrap_or(DEFAULT_STARTING_BLOCK);
     let batch_id = Arc::new(Mutex::new(0_u64));
     let active_task_count = Arc::new(Mutex::new(0_u64));
 
@@ -106,6 +106,7 @@ async fn main() -> eyre::Result<()> {
             match rpc.get_transfer_events(from_block, BLOCK_RANGE).await {
                 Ok(transfer_events) => {
                     let batch = handler.read_events(current_batch_id, &transfer_events).await?;
+                    println!("read {} events", batch.events().len());
                     event_tx.send(batch).await?;
                     println!("[tx-{}] sent to the channel", current_batch_id);
                 }
@@ -137,7 +138,7 @@ async fn main() -> eyre::Result<()> {
 /// In order for this mechanism to work properly it should work faster than the
 /// event handler tasks. Considering most of the performance bottleneck is
 /// blockchain reads, this function and `ProcessEvent` implementations should do
-/// the least amount of blockchain reads
+/// the least amount of blockchain reads, ideally none.
 ///
 /// # Errors
 /// This function returns `eyre::ErrReport` if there's problem with starting
@@ -170,6 +171,8 @@ async fn write_events(
             println!("[rx] Writing id #{:?} to DB", search_id.0);
             let mut transaction = pool.begin().await?;
 
+            // TODO: Tolerate fails in `EventProcess` impls. Currently they might
+            // be failing over a single event
             for event in pending_batch.into_events() {
                 match event {
                     Event::Erc721Transfer(event) => {
@@ -186,7 +189,6 @@ async fn write_events(
                     }
                 }
             }
-            // TODO: Proces the block diff
 
             latest_batch_id += 1;
             transaction.commit().await?;

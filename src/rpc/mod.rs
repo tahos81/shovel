@@ -50,8 +50,14 @@ impl StarknetRpc {
         let mut events: Vec<EmittedEvent> = Vec::new();
 
         loop {
-            get_events_resp =
-                self.0.get_events(transfer_filter.clone(), continuation_token, chunk_size).await?;
+            get_events_resp = match self
+                .0
+                .get_events(transfer_filter.clone(), continuation_token.clone(), chunk_size)
+                .await
+            {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
 
             println!("[rpc] got {} events", get_events_resp.events.len());
             events.append(&mut get_events_resp.events);
