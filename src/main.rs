@@ -20,10 +20,10 @@ use crate::rpc::StarknetRpc;
 // different tasks until they are executed
 const EVENT_CHANNEL_BUFFER_SIZE: usize = 20;
 // Default starting block 1630 is around the first ERC721 Transfer event
-const DEFAULT_STARTING_BLOCK: u64 = 1630; 
+const DEFAULT_STARTING_BLOCK: u64 = 1630;
 const BLOCK_RANGE: u64 = 10;
 // Number of concurrent tasks
-const MAX_TASK_COUNT: u64 = 1;
+const MAX_TASK_COUNT: u64 = 50;
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
@@ -41,92 +41,72 @@ async fn main() -> eyre::Result<()> {
 
     let (event_tx, event_rx) = mpsc::channel::<EventBatch>(EVENT_CHANNEL_BUFFER_SIZE);
 
-    // Spawn the task that'll read each event_diff message and save them to the database
+    // Spawn the writer thread
     tokio::spawn(async move { write_events(event_rx, (&rpc).clone(), (&pool).clone()).await });
 
-    let start_block = 70000;
-        // db::postgres::last_synced_block(&pool).await.unwrap_or(DEFAULT_STARTING_BLOCK);
+    let start_block =
+        db::postgres::last_synced_block(&pool).await.unwrap_or(DEFAULT_STARTING_BLOCK);
     let batch_id = Arc::new(Mutex::new(0_u64));
-    let active_task_count = Arc::new(Mutex::new(0_u64));
+    let mut reader_threads = Vec::new();
 
-    loop {
+    for thread_id in 0..MAX_TASK_COUNT {
+        let event_tx = event_tx.clone();
         let batch_id = batch_id.clone();
 
-        // Before spawning a task check the active task count and make sure
-        // that we don't have too many tasks at once
-        let task_count_check = active_task_count.clone();
-        let task_count_check = task_count_check.lock().await;
-        if *task_count_check >= MAX_TASK_COUNT {
-            continue;
-        }
+        let thread_handle = tokio::spawn(async move {
+            loop {
+                // Acquire and increment batch id
+                let current_batch_id = {
+                    let mut lock = batch_id.lock().await;
+                    let latest_value = *lock;
+                    *lock += 1;
+                    latest_value
+                };
 
-        let task_count = active_task_count.clone();
-        let event_tx = event_tx.clone();
+                let from_block = start_block + BLOCK_RANGE * current_batch_id;
+                println!(
+                    "[tx-{}] reading between {}-{}, batch id: {}",
+                    thread_id,
+                    from_block,
+                    from_block + BLOCK_RANGE,
+                    current_batch_id,
+                );
+                let pool = (&pool).clone();
+                let rpc = rpc.clone();
+                let handler = events::EventHandler::new(rpc.inner(), pool);
 
-        tokio::spawn(async move {
-            // Before each task, lock the task count and learn about how many
-            // tasks are there. In order for other tasks to have this information
-            // unlock it (by dropping) immediately.
-            let mut task_count_before = task_count.lock().await;
-            let current_task_count = *task_count_before;
+                let empty_batch = EventBatch::new(current_batch_id, vec![]);
+                match rpc.get_transfer_events(from_block, BLOCK_RANGE).await {
+                    Ok(transfer_events) => {
+                        let batch =
+                            match handler.read_events(current_batch_id, &transfer_events).await {
+                                Ok(batch) => batch,
+                                Err(_) => empty_batch,
+                            };
 
-            // If there are tasks more than or equal to MAX_TASK_COUNT, wait to
-            // get notified.
-            if current_task_count >= MAX_TASK_COUNT {
-                // Max task count reached, wait for other tasks to finish
-                // println!("[tx] task limit reached, waiting, ({})", current_task_count);
-                // drop(task_count_before);
-                // notify.notified().await;
-                return Ok(());
-                // println!("[tx] notified");
-            } else {
-                // Lock the task count briefly and increment it
-                // let mut task_count_before = task_count.lock().await;
-                // println!("[tx] spawned with task_count {}", *task_count_before);
-                *task_count_before += 1;
-                drop(task_count_before);
-            }
-
-            // Since we started running the task, increment batch id as well
-            let mut batch_id = batch_id.lock().await;
-            let current_batch_id = *batch_id;
-            *batch_id += 1;
-            drop(batch_id); // Again, drop it so that we don't block anything
-
-            let from_block = start_block + BLOCK_RANGE * current_batch_id;
-            println!(
-                "[tx] reading between {}-{}, batch id: {}",
-                from_block,
-                from_block + BLOCK_RANGE,
-                current_batch_id,
-            );
-            let pool = (&pool).clone();
-            let rpc = rpc.clone();
-            let handler = events::EventHandler::new(rpc.inner(), pool);
-            match rpc.get_transfer_events(from_block, BLOCK_RANGE).await {
-                Ok(transfer_events) => {
-                    let batch = handler.read_events(current_batch_id, &transfer_events).await?;
-                    println!("read {} events", batch.events().len());
-                    event_tx.send(batch).await?;
-                    println!("[tx-{}] sent to the channel", current_batch_id);
-                }
-                Err(e) => {
-                    println!("[tx-{}] failure: {:?}", current_batch_id, e);
-                    // When there's an error we don't want to brick rx task,
-                    // so send an empty message. Ideally, we shouldn't error unless
-                    // something critical happens
-                    // TODO: Increase error tolerance of `EventHandler::read_events`
-                    event_tx.send(EventBatch::new(current_batch_id, Vec::new())).await?;
+                        event_tx.send(batch).await.expect("Send batch");
+                        println!("[tx-{}] sent to the channel", thread_id);
+                    }
+                    Err(e) => {
+                        // When there's an error we don't want to brick rx task,
+                        // so send an empty message. Ideally, we shouldn't error unless
+                        // something critical happens
+                        // TODO: Increase error tolerance of `EventHandler::read_events`
+                        eprintln!("[tx-{}] failure: {:?}", current_batch_id, e);
+                        event_tx.send(empty_batch).await.expect("Send batch")
+                    }
                 }
             }
-
-            // Lock the task count again and decrement it
-            let mut task_count_after = task_count.lock().await;
-            *task_count_after -= 1;
-
-            eyre::Result::<(), eyre::ErrReport>::Ok(())
         });
+
+        reader_threads.push(thread_handle);
     }
+
+    for thread in reader_threads {
+        drop(thread.await.unwrap());
+    }
+
+    Ok(())
 }
 
 /// Reads from the `EventBatch` receiver and writes the events to the database
