@@ -85,7 +85,8 @@ pub mod process_event {
     ) -> eyre::Result<()> {
         let block_id = BlockId::Number(event.block_number);
         let block_number = i64::try_from(event.block_number).unwrap();
-        let token_uri = fetch_and_insert_metadata(event, rpc, &mut *transaction).await?;
+        let token_uri = fetch_and_insert_metadata(event, rpc, &mut *transaction).await.ok();
+        println!("[process_mint] got uri {:?} for token #{}", token_uri, event.token_id.low.to_string());
 
         // Check contract metadata
         let contract_metadata_exists = sqlx::query!(
@@ -105,9 +106,13 @@ pub mod process_event {
         .exists
         .unwrap_or_default();
 
+        println!("[process_mint] contract_metadata_exists: {:?}", contract_metadata_exists);
+
         if !contract_metadata_exists {
+            println!("[process_mint] no metadata found, inserting a new one");
             let name = contract::get_name(event.contract_address.0, &block_id, rpc).await;
             let symbol = contract::get_symbol(event.contract_address.0, &block_id, rpc).await;
+            println!("[process_mint] name: {}, symbol: {}", &name, &symbol);
 
             sqlx::query!(
                 r#"

@@ -82,8 +82,7 @@ pub mod token {
 
         let token_uri_response = match rpc.call(request, block_id).await {
             Ok(felt_array) => felt_array,
-            Err(e) => {
-                dbg!(e);
+            Err(_) => {
                 return String::new();
             }
         };
@@ -262,6 +261,9 @@ pub mod contract {
         result.to_utf8_string()
     }
 
+    /// Returns if given address is EIP721 compliant
+    /// This function is required as on Starknet ERC20 and ERC721 tokens have
+    /// same "Transfer" event key.
     pub async fn is_erc721(
         address: FieldElement,
         block_id: &BlockId,
@@ -272,6 +274,7 @@ pub mod contract {
             None => return Ok(false),
         };
 
+        // Simplest check we can do is to check "ownerOf" function.
         for abi_entry in abi {
             if let Function(function_abi_entry) = abi_entry {
                 if function_abi_entry.name == "ownerOf" || function_abi_entry.name == "owner_of" {

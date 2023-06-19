@@ -1,6 +1,7 @@
 pub mod erc1155;
 pub mod erc721;
 
+use async_trait::async_trait;
 use color_eyre::eyre;
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Postgres};
@@ -17,6 +18,7 @@ use crate::{
     common::starknet_constants::{
         TRANSFER_BATCH_EVENT_KEY, TRANSFER_EVENT_KEY, TRANSFER_SINGLE_EVENT_KEY,
     },
+    db::postgres::process::ProcessEvent,
     rpc::metadata::contract,
 };
 
@@ -30,6 +32,30 @@ pub enum Event {
     Erc721Transfer(Erc721Transfer),
     Erc1155TransferSingle(Erc1155TransferSingle),
     Erc1155TransferBatch(Erc1155TransferBatch),
+}
+
+#[async_trait]
+impl ProcessEvent for Event {
+    async fn process(
+        &self,
+        rpc: &'static JsonRpcClient<HttpTransport>,
+        transaction: &mut sqlx::Transaction<'_, Postgres>,
+    ) -> eyre::Result<()> {
+        match self {
+            Self::Erc721Transfer(event) => {
+                println!("[process] erc721 transfer");
+                event.process(rpc, transaction).await
+            },
+            Self::Erc1155TransferSingle(event) => {
+                println!("[process] erc1155 transfer single");
+                event.process(rpc, transaction).await 
+            }
+            Self::Erc1155TransferBatch(event) => {
+                println!("[process] erc1155 transfer batch");
+                event.process(rpc, transaction).await
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -72,18 +98,21 @@ impl<'a> EventHandler<'a> {
         batch_id: u64,
         events: &[EmittedEvent],
     ) -> eyre::Result<EventBatch> {
-        let mut event_diffs = Vec::<Event>::new();
+        let mut event_infos = Vec::<Event>::new();
 
+        // For every emitted event, try to extract Event information out of it
+        // If it fails, ignore the error; most likely the contract is erc20 and 
+        // we don't want to index them atm
         for event in events {
             match self.read_event(event).await {
-                Ok(diff) => event_diffs.push(diff),
+                Ok(diff) => event_infos.push(diff),
                 Err(_) => {
                     // eprintln!("{:?}", e)
-                },
+                }
             }
         }
 
-        Ok(EventBatch::new(batch_id, event_diffs))
+        Ok(EventBatch::new(batch_id, event_infos))
     }
 
     pub async fn read_event(&self, event: &EmittedEvent) -> eyre::Result<Event> {

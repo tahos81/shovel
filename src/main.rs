@@ -6,7 +6,7 @@ mod events;
 mod file_storage;
 mod rpc;
 use db::postgres::process::ProcessEvent;
-use events::{Event, EventBatch};
+use events::EventBatch;
 use sqlx::{Pool, Postgres};
 use std::{cmp::Reverse, collections::BinaryHeap, sync::Arc};
 use tokio::sync::{mpsc, Mutex};
@@ -16,14 +16,14 @@ use dotenv::dotenv;
 
 use crate::rpc::StarknetRpc;
 
-// Initial size of the Vec that is going to hold EventCache's accumulated from
-// different tasks until they are executed
-const EVENT_CHANNEL_BUFFER_SIZE: usize = 20;
 // Default starting block 1630 is around the first ERC721 Transfer event
 const DEFAULT_STARTING_BLOCK: u64 = 1630;
 const BLOCK_RANGE: u64 = 10;
 // Number of concurrent tasks
-const MAX_TASK_COUNT: u64 = 50;
+const MAX_TASK_COUNT: usize = 5;
+// Initial size of the Vec that is going to hold EventCache's accumulated from
+// different tasks until they are executed
+const EVENT_CHANNEL_BUFFER_SIZE: usize = MAX_TASK_COUNT * 2;
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
@@ -39,10 +39,13 @@ async fn main() -> eyre::Result<()> {
     let rpc: &'static StarknetRpc = Box::leak(Box::new(StarknetRpc::mainnet().unwrap()));
     let pool: &'static Pool<Postgres> = Box::leak(Box::new(pool));
 
-    let (event_tx, event_rx) = mpsc::channel::<EventBatch>(EVENT_CHANNEL_BUFFER_SIZE);
+    let (event_tx, event_rx) = mpsc::channel::<Box<EventBatch>>(EVENT_CHANNEL_BUFFER_SIZE);
 
     // Spawn the writer thread
-    tokio::spawn(async move { write_events(event_rx, (&rpc).clone(), (&pool).clone()).await });
+    tokio::spawn(async move {
+        write_events(event_rx, (&rpc).clone(), (&pool).clone()).await.unwrap();
+        println!("Writer thread closed");
+    });
 
     let start_block =
         db::postgres::last_synced_block(&pool).await.unwrap_or(DEFAULT_STARTING_BLOCK);
@@ -83,17 +86,14 @@ async fn main() -> eyre::Result<()> {
                                 Ok(batch) => batch,
                                 Err(_) => empty_batch,
                             };
+                        println!("[tx-{}], got {} events", thread_id, batch.events().len());
 
-                        event_tx.send(batch).await.expect("Send batch");
+                        event_tx.send(Box::new(batch)).await.unwrap();
                         println!("[tx-{}] sent to the channel", thread_id);
                     }
                     Err(e) => {
-                        // When there's an error we don't want to brick rx task,
-                        // so send an empty message. Ideally, we shouldn't error unless
-                        // something critical happens
-                        // TODO: Increase error tolerance of `EventHandler::read_events`
                         eprintln!("[tx-{}] failure: {:?}", current_batch_id, e);
-                        event_tx.send(empty_batch).await.expect("Send batch")
+                        event_tx.send(Box::new(empty_batch)).await.expect("Send batch")
                     }
                 }
             }
@@ -128,13 +128,13 @@ async fn main() -> eyre::Result<()> {
 /// This function panics if it can't find the pending_batch in the batches,
 /// which should be something impossible.
 async fn write_events(
-    mut event_rx: mpsc::Receiver<EventBatch>,
+    mut event_rx: mpsc::Receiver<Box<EventBatch>>,
     rpc: &'static StarknetRpc,
     pool: &Pool<Postgres>,
 ) -> eyre::Result<()> {
     let mut latest_batch_id: u64 = 0;
     let mut batch_id_heap = BinaryHeap::<Reverse<u64>>::with_capacity(EVENT_CHANNEL_BUFFER_SIZE);
-    let mut batches = Vec::<EventBatch>::with_capacity(EVENT_CHANNEL_BUFFER_SIZE);
+    let mut batches = Vec::<Box<EventBatch>>::with_capacity(EVENT_CHANNEL_BUFFER_SIZE);
 
     while let Some(batch) = event_rx.recv().await {
         println!("[rx] got a new batch {}, latest: {}", batch.batch_id(), latest_batch_id);
@@ -151,22 +151,9 @@ async fn write_events(
             println!("[rx] Writing id #{:?} to DB", search_id.0);
             let mut transaction = pool.begin().await?;
 
-            // TODO: Tolerate fails in `EventProcess` impls. Currently they might
-            // be failing over a single event
             for event in pending_batch.into_events() {
-                match event {
-                    Event::Erc721Transfer(event) => {
-                        println!("[rx] processing ERC721 Transfer event");
-                        event.process(rpc.inner(), &mut transaction).await?
-                    }
-                    Event::Erc1155TransferSingle(event) => {
-                        println!("[rx] processing ERC1155 TransferSingle event");
-                        event.process(rpc.inner(), &mut transaction).await?
-                    }
-                    Event::Erc1155TransferBatch(event) => {
-                        println!("[rx] processing ERC1155 TransferBatch event");
-                        event.process(rpc.inner(), &mut transaction).await?
-                    }
+                if let Err(e) = event.process(rpc.inner(), &mut transaction).await {
+                    eprintln!("[rx] error while writing, {}", e);
                 }
             }
 
