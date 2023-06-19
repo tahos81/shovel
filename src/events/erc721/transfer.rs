@@ -1,20 +1,7 @@
-use crate::{
-    common::{starknet_constants::ZERO_FELT, types::CairoUint256},
-    db::postgres::process::ProcessEvent,
-    events::{EventHandler, HexFieldElement},
-    rpc::metadata::{contract, token},
-};
-use async_trait::async_trait;
-use color_eyre::eyre::Result;
-use starknet::{
-    core::types::FieldElement,
-    providers::jsonrpc::{
-        models::{BlockId, EmittedEvent},
-        HttpTransport, JsonRpcClient,
-    },
-};
-use token::TokenMetadata;
+use crate::{common::types::CairoUint256, events::HexFieldElement};
+use starknet::{core::types::FieldElement, providers::jsonrpc::models::EmittedEvent};
 
+#[derive(Debug, Clone)]
 pub struct Erc721Transfer {
     pub sender: HexFieldElement,
     pub recipient: HexFieldElement,
@@ -22,7 +9,6 @@ pub struct Erc721Transfer {
     pub contract_address: HexFieldElement,
     pub block_number: u64,
 }
-
 impl Erc721Transfer {
     pub fn new(
         sender: FieldElement,
@@ -41,17 +27,6 @@ impl Erc721Transfer {
     }
 }
 
-#[async_trait]
-impl ProcessEvent for Erc721Transfer {
-    async fn process(&self, handler: &mut EventHandler<'_, '_>) -> Result<()> {
-        if self.sender == ZERO_FELT {
-            processors::handle_mint(self, handler.rpc, handler.transaction).await
-        } else {
-            processors::handle_transfer(self, handler.transaction).await
-        }
-    }
-}
-
 impl From<&EmittedEvent> for Erc721Transfer {
     fn from(event: &EmittedEvent) -> Self {
         let contract_address = event.from_address;
@@ -60,26 +35,58 @@ impl From<&EmittedEvent> for Erc721Transfer {
 
         let sender = event.data[0];
         let recipient = event_data[1];
-        let token_id = CairoUint256::new(event_data[2], *event_data.get(3).unwrap_or(&ZERO_FELT));
+        let token_id =
+            CairoUint256::new(event_data[2], *event_data.get(3).unwrap_or(&FieldElement::ZERO));
 
         Erc721Transfer::new(sender, recipient, token_id, contract_address, block_number)
     }
 }
 
-mod processors {
-    use super::{
-        contract, token, BlockId, Erc721Transfer, HttpTransport, JsonRpcClient, Result,
-        TokenMetadata,
+pub mod process_event {
+    use async_trait::async_trait;
+    use color_eyre::eyre;
+    use sqlx::{Postgres, Transaction};
+    use starknet::{
+        core::types::FieldElement,
+        providers::jsonrpc::{models::BlockId, HttpTransport, JsonRpcClient},
     };
 
-    pub async fn handle_mint(
+    use super::Erc721Transfer;
+    use crate::{
+        db::postgres::process::ProcessEvent,
+        rpc::metadata::{
+            contract,
+            token::{self, TokenMetadata},
+        },
+    };
+
+    #[async_trait]
+    impl ProcessEvent for Erc721Transfer {
+        async fn process(
+            &self,
+            rpc: &'static JsonRpcClient<HttpTransport>,
+            transaction: &mut Transaction<'_, Postgres>,
+        ) -> eyre::Result<()> {
+            if self.sender == FieldElement::ZERO {
+                println!("[erc721] processing mint");
+                self::process_mint(&self, rpc, transaction).await
+            } else {
+                println!("[erc721] processing transfer");
+                self::process_transfer(&self, transaction).await
+            }
+        }
+    }
+
+    #[inline]
+    pub async fn process_mint(
         event: &Erc721Transfer,
         rpc: &JsonRpcClient<HttpTransport>,
         transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    ) -> Result<()> {
+    ) -> eyre::Result<()> {
         let block_id = BlockId::Number(event.block_number);
         let block_number = i64::try_from(event.block_number).unwrap();
-        let token_uri = fetch_and_insert_metadata(event, rpc, &mut *transaction).await?;
+        let token_uri = fetch_and_insert_metadata(event, rpc, &mut *transaction).await.ok();
+        println!("[process_mint] got uri {:?} for token #{}", token_uri, event.token_id.low.to_string());
 
         // Check contract metadata
         let contract_metadata_exists = sqlx::query!(
@@ -99,9 +106,13 @@ mod processors {
         .exists
         .unwrap_or_default();
 
+        println!("[process_mint] contract_metadata_exists: {:?}", contract_metadata_exists);
+
         if !contract_metadata_exists {
+            println!("[process_mint] no metadata found, inserting a new one");
             let name = contract::get_name(event.contract_address.0, &block_id, rpc).await;
             let symbol = contract::get_symbol(event.contract_address.0, &block_id, rpc).await;
+            println!("[process_mint] name: {}, symbol: {}", &name, &symbol);
 
             sqlx::query!(
                 r#"
@@ -162,10 +173,11 @@ mod processors {
         Ok(())
     }
 
-    pub async fn handle_transfer(
+    #[inline]
+    pub async fn process_transfer(
         event: &Erc721Transfer,
         transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    ) -> Result<()> {
+    ) -> eyre::Result<()> {
         let block_number = i64::try_from(event.block_number).unwrap();
 
         // Find the ERC721 entry with given contract address and id
@@ -183,74 +195,46 @@ mod processors {
             event.token_id.high.to_string(),
         )
         .fetch_one(&mut *transaction)
-        .await;
+        .await?
+        .id;
 
-        match erc721_id {
-            Ok(erc721_id) => {
-                let erc721_id = erc721_id.id;
-                // Update latest owner
-                sqlx::query!(
-                    r#"
+        // Update latest owner
+        sqlx::query!(
+            r#"
                 UPDATE erc721_data
                 SET latest_owner = $1, last_updated_block = $2
                 WHERE id = $3
             "#,
-                    event.recipient.to_string(),
-                    block_number,
-                    erc721_id,
-                )
-                .execute(&mut *transaction)
-                .await?;
+            event.recipient.to_string(),
+            block_number,
+            erc721_id,
+        )
+        .execute(&mut *transaction)
+        .await?;
 
-                // Update owners list
-                sqlx::query!(
-                    r#"
+        // Update owners list
+        sqlx::query!(
+            r#"
                 INSERT INTO erc721_owners(erc721_id, owner, block)
                 VALUES($1, $2, $3)
             "#,
-                    erc721_id,
-                    event.recipient.to_string(),
-                    block_number
-                )
-                .execute(&mut *transaction)
-                .await?;
-            }
-
-            Err(_) => {
-                sqlx::query!(
-                    r#"
-                        INSERT INTO erc721_data(
-                            contract_address,
-                            token_id_low,
-                            token_id_high,
-                            latest_owner,
-                            token_uri,
-                            last_updated_block)
-                        VALUES ($1, $2, $3, $4, $5, $6)
-                        RETURNING id
-                    "#,
-                    event.contract_address.to_string(),
-                    event.token_id.low.to_string(),
-                    event.token_id.high.to_string(),
-                    event.recipient.to_string(),
-                    String::default(),
-                    i64::try_from(event.block_number).unwrap()
-                )
-                .fetch_one(&mut *transaction)
-                .await?;
-            }
-        }
+            erc721_id,
+            event.recipient.to_string(),
+            block_number
+        )
+        .execute(&mut *transaction)
+        .await?;
 
         Ok(())
     }
 
+    #[inline]
     async fn fetch_and_insert_metadata(
         event: &Erc721Transfer,
         rpc: &JsonRpcClient<HttpTransport>,
         transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    ) -> Result<String> {
+    ) -> eyre::Result<String> {
         let block_id = BlockId::Number(event.block_number);
-
         let token_uri =
             token::get_erc721_uri(event.contract_address.0, &block_id, rpc, event.token_id).await;
         let metadata_result = token::get_token_metadata(&token_uri).await;

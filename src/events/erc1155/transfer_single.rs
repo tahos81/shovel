@@ -1,19 +1,7 @@
-use crate::{
-    common::types::CairoUint256,
-    db::postgres::process::ProcessEvent,
-    events::{EventHandler, HexFieldElement},
-    rpc::metadata::contract,
-};
-use async_trait::async_trait;
-use color_eyre::eyre::Result;
-use starknet::{
-    core::types::FieldElement,
-    providers::jsonrpc::{
-        models::{BlockId, EmittedEvent},
-        HttpTransport, JsonRpcClient,
-    },
-};
+use crate::{common::types::CairoUint256, events::HexFieldElement};
+use starknet::{core::types::FieldElement, providers::jsonrpc::models::EmittedEvent};
 
+#[derive(Debug, Clone)]
 pub struct Erc1155TransferSingle {
     pub sender: HexFieldElement,
     pub recipient: HexFieldElement,
@@ -43,13 +31,6 @@ impl Erc1155TransferSingle {
     }
 }
 
-#[async_trait]
-impl ProcessEvent for Erc1155TransferSingle {
-    async fn process(&self, handler: &mut EventHandler<'_, '_>) -> Result<()> {
-        processors::handle_transfer(self, handler.rpc, handler.transaction).await
-    }
-}
-
 impl From<&EmittedEvent> for Erc1155TransferSingle {
     fn from(event: &EmittedEvent) -> Self {
         let contract_address = event.from_address;
@@ -72,20 +53,42 @@ impl From<&EmittedEvent> for Erc1155TransferSingle {
     }
 }
 
-mod processors {
-    use crate::rpc::metadata::token::TokenMetadata;
-
-    use super::super::super::super::rpc::metadata::token;
-    use super::{
-        contract, BlockId, CairoUint256, Erc1155TransferSingle, FieldElement, HttpTransport,
-        JsonRpcClient, Result,
+pub mod process_event {
+    use async_trait::async_trait;
+    use color_eyre::eyre;
+    use starknet::{
+        core::types::FieldElement,
+        providers::jsonrpc::{models::BlockId, HttpTransport, JsonRpcClient},
     };
 
-    pub async fn handle_transfer(
+    use crate::{
+        common::types::CairoUint256,
+        db::postgres::process::ProcessEvent,
+        rpc::metadata::{
+            contract,
+            token::{self, TokenMetadata},
+        },
+    };
+
+    use super::Erc1155TransferSingle;
+
+    #[async_trait]
+    impl ProcessEvent for Erc1155TransferSingle {
+        async fn process(
+            &self,
+            rpc: &'static JsonRpcClient<HttpTransport>,
+            transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        ) -> eyre::Result<()> {
+            self::process_transfer(&self, rpc, transaction).await
+        }
+    }
+
+    #[inline]
+    pub async fn process_transfer(
         event: &Erc1155TransferSingle,
         rpc: &JsonRpcClient<HttpTransport>,
         transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    ) -> Result<()> {
+    ) -> eyre::Result<()> {
         let block_id = BlockId::Number(event.block_number);
         let block_number = i64::try_from(event.block_number).unwrap();
 
@@ -151,7 +154,7 @@ mod processors {
             .unwrap_or_default();
 
             if !token_metadata_exists {
-                fetch_and_insert_metadata(event, rpc, &mut *transaction).await?;
+                self::fetch_and_insert_metadata(event, rpc, &mut *transaction).await?;
             }
         } else {
             let balance_record = sqlx::query!(
@@ -281,7 +284,7 @@ mod processors {
         event: &Erc1155TransferSingle,
         rpc: &JsonRpcClient<HttpTransport>,
         transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    ) -> Result<()> {
+    ) -> eyre::Result<()> {
         let block_id = BlockId::Number(event.block_number);
 
         let token_uri =
