@@ -33,7 +33,7 @@ pub async fn last_synced_block(pool: &sqlx::Pool<sqlx::Postgres>) -> Result<u64>
 
     last_synced_block
         .ok_or(eyre!("last_synced_block is null"))
-        .map(|block_number| block_number as u64)
+        .map(|block_number| u64::try_from(block_number).unwrap())
 }
 
 pub async fn update_last_synced_block(

@@ -45,10 +45,10 @@ impl ProcessEvent for Event {
             Self::Erc721Transfer(event) => {
                 println!("[process] erc721 transfer");
                 event.process(rpc, transaction).await
-            },
+            }
             Self::Erc1155TransferSingle(event) => {
                 println!("[process] erc1155 transfer single");
-                event.process(rpc, transaction).await 
+                event.process(rpc, transaction).await
             }
             Self::Erc1155TransferBatch(event) => {
                 println!("[process] erc1155 transfer batch");
@@ -61,13 +61,14 @@ impl ProcessEvent for Event {
 #[derive(Debug)]
 pub struct EventBatch {
     batch_id: u64,
+    start_block_number: u64,
     events: Vec<Event>,
 }
 
 #[allow(dead_code)]
 impl EventBatch {
-    pub fn new(batch_id: u64, events: Vec<Event>) -> Self {
-        Self { batch_id, events }
+    pub fn new(batch_id: u64, from_block_number: u64, events: Vec<Event>) -> Self {
+        Self { batch_id, start_block_number: from_block_number, events }
     }
 
     pub fn batch_id(&self) -> u64 {
@@ -80,6 +81,10 @@ impl EventBatch {
 
     pub fn into_events(self) -> Vec<Event> {
         self.events
+    }
+
+    pub fn start_block_number(&self) -> u64 {
+        self.start_block_number
     }
 }
 
@@ -96,23 +101,21 @@ impl<'a> EventHandler<'a> {
     pub async fn read_events(
         &self,
         batch_id: u64,
+        from_block_number: u64,
         events: &[EmittedEvent],
     ) -> eyre::Result<EventBatch> {
         let mut event_infos = Vec::<Event>::new();
 
         // For every emitted event, try to extract Event information out of it
-        // If it fails, ignore the error; most likely the contract is erc20 and 
+        // If it fails, ignore the error; most likely the contract is erc20 and
         // we don't want to index them atm
         for event in events {
-            match self.read_event(event).await {
-                Ok(diff) => event_infos.push(diff),
-                Err(_) => {
-                    // eprintln!("{:?}", e)
-                }
+            if let Ok(event_info) = self.read_event(event).await {
+                event_infos.push(event_info);
             }
         }
 
-        Ok(EventBatch::new(batch_id, event_infos))
+        Ok(EventBatch::new(batch_id, from_block_number, event_infos))
     }
 
     pub async fn read_event(&self, event: &EmittedEvent) -> eyre::Result<Event> {

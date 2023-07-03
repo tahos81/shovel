@@ -69,10 +69,10 @@ pub mod process_event {
         ) -> eyre::Result<()> {
             if self.sender == FieldElement::ZERO {
                 println!("[erc721] processing mint");
-                self::process_mint(&self, rpc, transaction).await
+                self::process_mint(self, rpc, transaction).await
             } else {
                 println!("[erc721] processing transfer");
-                self::process_transfer(&self, transaction).await
+                self::process_transfer(self, transaction).await
             }
         }
     }
@@ -86,7 +86,7 @@ pub mod process_event {
         let block_id = BlockId::Number(event.block_number);
         let block_number = i64::try_from(event.block_number).unwrap();
         let token_uri = fetch_and_insert_metadata(event, rpc, &mut *transaction).await.ok();
-        println!("[process_mint] got uri {:?} for token #{}", token_uri, event.token_id.low.to_string());
+        println!("[process_mint] got uri {:?} for token #{}", token_uri, event.token_id.low);
 
         // Check contract metadata
         let contract_metadata_exists = sqlx::query!(
@@ -106,7 +106,7 @@ pub mod process_event {
         .exists
         .unwrap_or_default();
 
-        println!("[process_mint] contract_metadata_exists: {:?}", contract_metadata_exists);
+        println!("[process_mint] contract_metadata_exists: {contract_metadata_exists:?}");
 
         if !contract_metadata_exists {
             println!("[process_mint] no metadata found, inserting a new one");
@@ -195,8 +195,35 @@ pub mod process_event {
             event.token_id.high.to_string(),
         )
         .fetch_one(&mut *transaction)
-        .await?
-        .id;
+        .await;
+
+        let erc721_id = match erc721_id {
+            Ok(record) => record.id,
+            Err(_) => {
+                sqlx::query!(
+                    r#"
+                        INSERT INTO erc721_data(
+                            contract_address,
+                            token_id_low,
+                            token_id_high,
+                            latest_owner,
+                            token_uri,
+                            last_updated_block)
+                        VALUES ($1, $2, $3, $4, $5, $6)
+                        RETURNING id
+                    "#,
+                    event.contract_address.to_string(),
+                    event.token_id.low.to_string(),
+                    event.token_id.high.to_string(),
+                    event.recipient.to_string(),
+                    String::new(),
+                    i64::try_from(event.block_number).unwrap()
+                )
+                .fetch_one(&mut *transaction)
+                .await?
+                .id
+            }
+        };
 
         // Update latest owner
         sqlx::query!(

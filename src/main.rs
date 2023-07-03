@@ -1,5 +1,5 @@
 #![warn(clippy::all, clippy::pedantic, clippy::style, rust_2018_idioms)]
-#![allow(clippy::unreadable_literal)]
+#![allow(clippy::unreadable_literal, clippy::module_name_repetitions, clippy::too_many_lines)]
 mod common;
 mod db;
 mod events;
@@ -14,7 +14,7 @@ use tokio::sync::{mpsc, Mutex};
 use color_eyre::eyre;
 use dotenv::dotenv;
 
-use crate::rpc::StarknetRpc;
+use crate::{db::postgres::update_last_synced_block, rpc::StarknetRpc};
 
 // Default starting block 1630 is around the first ERC721 Transfer event
 const DEFAULT_STARTING_BLOCK: u64 = 1630;
@@ -24,6 +24,7 @@ const MAX_TASK_COUNT: usize = 5;
 // Initial size of the Vec that is going to hold EventCache's accumulated from
 // different tasks until they are executed
 const EVENT_CHANNEL_BUFFER_SIZE: usize = MAX_TASK_COUNT * 2;
+const LAST_SYNC_UPDATE_INTERVAL: u64 = 5;
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
@@ -43,12 +44,13 @@ async fn main() -> eyre::Result<()> {
 
     // Spawn the writer thread
     tokio::spawn(async move {
-        write_events(event_rx, (&rpc).clone(), (&pool).clone()).await.unwrap();
+        let rpc = <&StarknetRpc>::clone(&rpc);
+        let pool = <&Pool<Postgres>>::clone(&pool);
+        write_events(event_rx, rpc, pool).await.unwrap();
         println!("Writer thread closed");
     });
 
-    let start_block =
-        db::postgres::last_synced_block(&pool).await.unwrap_or(DEFAULT_STARTING_BLOCK);
+    let start_block = db::postgres::last_synced_block(pool).await.unwrap_or(DEFAULT_STARTING_BLOCK);
     let batch_id = Arc::new(Mutex::new(0_u64));
     let mut reader_threads = Vec::new();
 
@@ -74,26 +76,28 @@ async fn main() -> eyre::Result<()> {
                     from_block + BLOCK_RANGE,
                     current_batch_id,
                 );
-                let pool = (&pool).clone();
-                let rpc = rpc.clone();
+                let pool = <&Pool<Postgres>>::clone(&pool);
+                let rpc = <&StarknetRpc>::clone(&rpc);
                 let handler = events::EventHandler::new(rpc.inner(), pool);
 
-                let empty_batch = EventBatch::new(current_batch_id, vec![]);
+                let empty_batch = EventBatch::new(current_batch_id, from_block, vec![]);
                 match rpc.get_transfer_events(from_block, BLOCK_RANGE).await {
                     Ok(transfer_events) => {
-                        let batch =
-                            match handler.read_events(current_batch_id, &transfer_events).await {
-                                Ok(batch) => batch,
-                                Err(_) => empty_batch,
-                            };
+                        let batch = match handler
+                            .read_events(current_batch_id, from_block, &transfer_events)
+                            .await
+                        {
+                            Ok(batch) => batch,
+                            Err(_) => empty_batch,
+                        };
                         println!("[tx-{}], got {} events", thread_id, batch.events().len());
 
                         event_tx.send(Box::new(batch)).await.unwrap();
-                        println!("[tx-{}] sent to the channel", thread_id);
+                        println!("[tx-{thread_id}] sent to the channel");
                     }
                     Err(e) => {
-                        eprintln!("[tx-{}] failure: {:?}", current_batch_id, e);
-                        event_tx.send(Box::new(empty_batch)).await.expect("Send batch")
+                        eprintln!("[tx-{thread_id}] failure: {e}");
+                        event_tx.send(Box::new(empty_batch)).await.expect("Send batch");
                     }
                 }
             }
@@ -103,7 +107,7 @@ async fn main() -> eyre::Result<()> {
     }
 
     for thread in reader_threads {
-        drop(thread.await.unwrap());
+        thread.await.unwrap();
     }
 
     Ok(())
@@ -125,7 +129,7 @@ async fn main() -> eyre::Result<()> {
 /// or commiting the Transaction
 ///
 /// # Panics
-/// This function panics if it can't find the pending_batch in the batches,
+/// This function panics if it can't find the `pending_batch` in the batches,
 /// which should be something impossible.
 async fn write_events(
     mut event_rx: mpsc::Receiver<Box<EventBatch>>,
@@ -147,17 +151,22 @@ async fn write_events(
             let pending_batch_idx =
                 batches.iter().position(|item| item.batch_id() == search_id.0).unwrap();
             let pending_batch = batches.remove(pending_batch_idx);
+            let from_block_number = pending_batch.start_block_number();
 
             println!("[rx] Writing id #{:?} to DB", search_id.0);
             let mut transaction = pool.begin().await?;
 
             for event in pending_batch.into_events() {
                 if let Err(e) = event.process(rpc.inner(), &mut transaction).await {
-                    eprintln!("[rx] error while writing, {}", e);
+                    eprintln!("[rx] error while writing, {e}");
                 }
             }
 
             latest_batch_id += 1;
+            if latest_batch_id % LAST_SYNC_UPDATE_INTERVAL == 0 {
+                update_last_synced_block(from_block_number, &mut transaction).await.unwrap();
+            }
+
             transaction.commit().await?;
         }
     }

@@ -16,9 +16,7 @@ pub fn svg_to_png(svg_data: &[u8]) -> Result<Vec<u8>> {
     let rtree = usvg::Tree::from_data(svg_data, &convert_options)?;
 
     // Create a pixel map with size 350 x 350
-    let mut pixmap = if let Some(result) = tiny_skia::Pixmap::new(SVG_WIDTH, SVG_HEIGHT) {
-        result
-    } else {
+    let Some(mut pixmap) = tiny_skia::Pixmap::new(SVG_WIDTH, SVG_HEIGHT) else {
         bail!(ConversionError::Unhandled)
     };
 
