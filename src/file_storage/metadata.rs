@@ -93,21 +93,24 @@ pub async fn store_metadata(
 }
 
 async fn fetch_http_content(url: &str) -> Option<(String, Vec<u8>)> {
-    let url = match reqwest::Url::from_str(url) {
-        Ok(v) => v,
-        _ => {
-            eprintln!("Failed to parse url {url}");
-            return None;
-        }
+    let Ok(url) = reqwest::Url::from_str(url) else {
+        eprintln!("Failed to parse url {url}");
+        return None;
     };
 
-    let (content_type, content_length) = match get_content_type_and_length(url.clone()).await {
-        Some((t, l)) => (t, l),
+    // let (content_type, content_length) = match get_content_type_and_length(url.clone()).await {
+    //     Some((t, l)) => (t, l),
+    //     // HEAD request failed or Content-Length header missing
+    //     _ => {
+    //         eprintln!("Content length doesn't exist");
+    //         return None;
+    //     }
+    // };
+
+    let Some((content_type, content_length)) = get_content_type_and_length(url.clone()).await else {
         // HEAD request failed or Content-Length header missing
-        _ => {
-            eprintln!("Content length doesn't exist");
-            return None;
-        }
+        eprintln!("Content length doesn't exist");
+        return None;
     };
 
     if content_length > MAX_CONTENT_LENGTH {
@@ -140,8 +143,10 @@ async fn get_content_type_and_length(url: reqwest::Url) -> Option<(String, u32)>
             .and_then(|v| v.to_str().ok())
             .and_then(|v| str::parse::<u32>(v).ok());
 
-        let content_type =
-            headers.get("content-type").and_then(|v| v.to_str().ok()).map(std::string::ToString::to_string);
+        let content_type = headers
+            .get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .map(std::string::ToString::to_string);
 
         content_type.zip(content_length)
     } else {

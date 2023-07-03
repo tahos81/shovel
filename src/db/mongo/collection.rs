@@ -101,12 +101,12 @@ impl Erc721CollectionInterface for Collection<Erc721> {
         let update = doc! {
             "$set": {
             "owner": format!("{new_owner:#x}"),
-            "last_updated": block_number as i32
+            "last_updated": i32::try_from(block_number).unwrap()
             },
             "$push": {
                 "previous_owners": {
                     "address": format!("{old_owner:#x}"),
-                    "block": block_number as i32
+                    "block": i32::try_from(block_number).unwrap()
                 }
             }
         };
@@ -155,7 +155,7 @@ impl Erc1155CollectionInterface for Collection<Erc1155Balance> {
                     "low": balance.low.to_string(),
                     "high": balance.high.to_string()
                 },
-                "last_updated": block_number as i32
+                "last_updated": i32::try_from(block_number).unwrap()
             }
         };
 

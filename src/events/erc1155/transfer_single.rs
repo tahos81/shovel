@@ -79,7 +79,7 @@ pub mod process_event {
             rpc: &'static JsonRpcClient<HttpTransport>,
             transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         ) -> eyre::Result<()> {
-            self::process_transfer(&self, rpc, transaction).await
+            self::process_transfer(self, rpc, transaction).await
         }
     }
 

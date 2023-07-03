@@ -80,11 +80,8 @@ pub mod token {
             calldata: vec![token_id.low, token_id.high],
         };
 
-        let token_uri_response = match rpc.call(request, block_id).await {
-            Ok(felt_array) => felt_array,
-            Err(_) => {
-                return String::new();
-            }
+        let Ok(token_uri_response) = rpc.call(request, block_id).await else {
+            return String::new();
         };
 
         // If tokenURI function is EIP721Metadata compliant, it should return one felt
@@ -126,9 +123,8 @@ pub mod token {
             };
         }
 
-        let token_uri_response = match token_uri_response {
-            Some(felt_array) => felt_array,
-            None => return String::new(),
+        let Some(token_uri_response) = token_uri_response else {
+            return String::new();
         };
 
         let is_felt_array = token_uri_response.len() > 1;
@@ -269,9 +265,8 @@ pub mod contract {
         block_id: &BlockId,
         rpc: &JsonRpcClient<HttpTransport>,
     ) -> Result<bool> {
-        let abi = match rpc.get_class_at(block_id, address).await?.abi {
-            Some(abi) => abi,
-            None => return Ok(false),
+        let Some(abi) = rpc.get_class_at(block_id, address).await?.abi else {
+            return Ok(false);
         };
 
         // Simplest check we can do is to check "ownerOf" function.

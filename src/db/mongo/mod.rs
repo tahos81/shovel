@@ -36,7 +36,7 @@ pub async fn update_last_synced_block(
     let commons: Collection<u64> = db.collection("indexer_metadata");
 
     let update = doc! {
-        "$set": {"last_sync": last_sync as i64}
+        "$set": {"last_sync": i64::try_from(last_sync).unwrap() }
     };
 
     let options = UpdateOptions::builder().upsert(true).build();
