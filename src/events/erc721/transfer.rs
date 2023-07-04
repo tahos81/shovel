@@ -77,7 +77,6 @@ pub mod process_event {
         }
     }
 
-    #[inline]
     pub async fn process_mint(
         event: &Erc721Transfer,
         rpc: &JsonRpcClient<HttpTransport>,
@@ -177,7 +176,6 @@ pub mod process_event {
         Ok(())
     }
 
-    #[inline]
     pub async fn process_transfer(
         event: &Erc721Transfer,
         transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
@@ -259,7 +257,13 @@ pub mod process_event {
         Ok(())
     }
 
-    #[inline]
+    /// Fetches metadata for given event's token ID and insert a new metadata record for it
+    ///
+    /// Returns token URI
+    ///
+    /// # Panics
+    ///
+    /// Panics if database reads or insertions fail
     async fn fetch_and_insert_metadata(
         event: &Erc721Transfer,
         rpc: &JsonRpcClient<HttpTransport>,
