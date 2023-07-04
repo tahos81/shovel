@@ -16,8 +16,9 @@ pub async fn drop_everything(pool: &sqlx::Pool<sqlx::Postgres>) -> Result<()> {
 
     sqlx::query!("DELETE FROM contract_metadata").execute(&mut transaction).await?;
     sqlx::query!("DELETE FROM token_metadata").execute(&mut transaction).await?;
-    sqlx::query!("DELETE FROM erc721_data").execute(&mut transaction).await?;
+    sqlx::query!("DELETE FROM erc721_token").execute(&mut transaction).await?;
     sqlx::query!("DELETE FROM erc721_owners").execute(&mut transaction).await?;
+    sqlx::query!("DELETE FROM erc1155_token").execute(&mut transaction).await?;
     sqlx::query!("DELETE FROM erc1155_balances").execute(&mut transaction).await?;
 
     transaction.commit().await?;
