@@ -8,6 +8,7 @@ mod rpc;
 use db::postgres::process::ProcessEvent;
 use events::EventBatch;
 use sqlx::{Pool, Postgres};
+use starknet::providers::Provider;
 use std::{cmp::Reverse, collections::BinaryHeap, sync::Arc};
 use tokio::sync::{mpsc, Mutex};
 
@@ -20,7 +21,7 @@ use crate::{db::postgres::update_last_synced_block, rpc::StarknetRpc};
 const DEFAULT_STARTING_BLOCK: u64 = 1630;
 const BLOCK_RANGE: u64 = 10;
 // Number of concurrent tasks
-const MAX_TASK_COUNT: usize = 5;
+const MAX_TASK_COUNT: usize = 10;
 // Initial size of the Vec that is going to hold EventCache's accumulated from
 // different tasks until they are executed
 const EVENT_CHANNEL_BUFFER_SIZE: usize = MAX_TASK_COUNT * 2;
@@ -81,10 +82,16 @@ async fn main() -> eyre::Result<()> {
                 let handler = events::EventHandler::new(rpc.inner(), pool);
 
                 let empty_batch = EventBatch::new(current_batch_id, from_block, vec![]);
+                let whitelist = db::postgres::whitelist(&pool).await;
                 match rpc.get_transfer_events(from_block, BLOCK_RANGE).await {
                     Ok(transfer_events) => {
                         let batch = match handler
-                            .read_events(current_batch_id, from_block, &transfer_events)
+                            .read_events(
+                                current_batch_id,
+                                from_block,
+                                &transfer_events,
+                                events::EventFilter::Whitelist(&whitelist),
+                            )
                             .await
                         {
                             Ok(batch) => batch,

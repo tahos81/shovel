@@ -3,6 +3,7 @@ pub mod process;
 // TODO: Pack following functions into a trait that all databases can implement
 
 use color_eyre::eyre::{eyre, Result};
+use starknet::core::types::FieldElement;
 
 pub async fn connect() -> Result<sqlx::Pool<sqlx::Postgres>> {
     let conn_str = std::env::var("DATABASE_URL").expect("Env var DATABASE_URL is required");
@@ -24,6 +25,19 @@ pub async fn drop_everything(pool: &sqlx::Pool<sqlx::Postgres>) -> Result<()> {
     transaction.commit().await?;
 
     Ok(())
+}
+
+pub async fn whitelist(pool: &sqlx::Pool<sqlx::Postgres>) -> Vec<FieldElement> {
+    sqlx::query!("SELECT * FROM whitelisted_contracts")
+        .fetch_all(pool)
+        .await
+        .map(|records| {
+            records
+                .iter()
+                .map(|record| FieldElement::from_dec_str(&record.address).unwrap())
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 pub async fn last_synced_block(pool: &sqlx::Pool<sqlx::Postgres>) -> Result<u64> {

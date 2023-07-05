@@ -112,14 +112,10 @@ pub mod token {
                 entry_point_selector: selector,
                 calldata: vec![token_id.low, token_id.high],
             };
-            match rpc.call(request, block_id).await {
-                Ok(felt_array) => {
-                    token_uri_response = Some(felt_array);
-                    break;
-                }
-                Err(e) => {
-                    // dbg!(e);
-                }
+
+            if let Ok(felt_array) = rpc.call(request, block_id).await {
+                token_uri_response = Some(felt_array);
+                break;
             };
         }
 
@@ -266,7 +262,7 @@ pub mod contract {
     ) -> eyre::Result<bool> {
         let abi = match rpc.get_class_at(block_id, address).await? {
             ContractClass::Sierra(_) => eyre::bail!("sierra not supported yet"),
-            ContractClass::Legacy(leg) => leg.abi
+            ContractClass::Legacy(leg) => leg.abi,
         };
 
         let Some(abi) = abi else {
