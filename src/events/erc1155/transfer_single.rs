@@ -1,5 +1,5 @@
 use crate::{common::types::CairoUint256, events::HexFieldElement};
-use starknet::{core::types::FieldElement, providers::jsonrpc::models::EmittedEvent};
+use starknet::core::types::{EmittedEvent, FieldElement};
 
 #[derive(Debug, Clone)]
 pub struct Erc1155TransferSingle {
@@ -57,8 +57,8 @@ pub mod process_event {
     use async_trait::async_trait;
     use color_eyre::eyre;
     use starknet::{
-        core::types::FieldElement,
-        providers::jsonrpc::{models::BlockId, HttpTransport, JsonRpcClient},
+        core::types::{BlockId, FieldElement},
+        providers::jsonrpc::{HttpTransport, JsonRpcClient},
     };
 
     use crate::{
@@ -79,43 +79,49 @@ pub mod process_event {
             rpc: &'static JsonRpcClient<HttpTransport>,
             transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         ) -> eyre::Result<()> {
-            self::process_transfer(self, rpc, transaction).await
+            if self.sender == FieldElement::ZERO {
+                println!("[erc1155] processing mint");
+                self::process_mint(self, rpc, transaction).await
+            } else {
+                println!("[erc1155] processing transfer");
+                self::process_transfer(self, transaction).await
+            }
         }
     }
 
-    #[inline]
-    pub async fn process_transfer(
+    pub async fn process_mint(
         event: &Erc1155TransferSingle,
         rpc: &JsonRpcClient<HttpTransport>,
         transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     ) -> eyre::Result<()> {
         let block_id = BlockId::Number(event.block_number);
         let block_number = i64::try_from(event.block_number).unwrap();
+        let token_uri = self::fetch_and_insert_metadata(event, rpc, &mut *transaction).await?;
+        println!("[process_mint] got uri {:?} for token #{}", token_uri, event.token_id.low);
 
-        // First, update from balance
-        if event.sender == FieldElement::ZERO {
-            // Check if contract metadata exists
-            let contract_metadata_exists = sqlx::query!(
-                r#"
-                    SELECT EXISTS (
-                        SELECT * 
-                        FROM contract_metadata 
-                        WHERE
-                            contract_address = $1 AND
-                            contract_type = 'ERC721'
-                    )
-                "#,
-                event.contract_address.to_string()
-            )
-            .fetch_one(&mut *transaction)
-            .await?
-            .exists
-            .unwrap_or_default();
+        // Check contract metadata
+        let contract_metadata_id = sqlx::query!(
+            r#"
+                SELECT id
+                FROM contract_metadata 
+                WHERE
+                    contract_address = $1 AND
+                    contract_type = 'ERC1155'
+            "#,
+            event.contract_address.to_string()
+        )
+        .fetch_one(&mut *transaction)
+        .await
+        .map(|record| record.id);
 
-            if !contract_metadata_exists {
-                // Query name and symbol, then insert contract metadata
+        // If no contract metadata exists, insert a new record, or use the existing one
+        let contract_metadata_id = match contract_metadata_id {
+            Ok(id) => id,
+            Err(_) => {
+                println!("[process_mint] no metadata found, inserting a new one");
                 let name = contract::get_name(event.contract_address.0, &block_id, rpc).await;
                 let symbol = contract::get_symbol(event.contract_address.0, &block_id, rpc).await;
+                println!("[process_mint] name: {}, symbol: {}", &name, &symbol);
 
                 sqlx::query!(
                     r#"
@@ -125,83 +131,136 @@ pub mod process_event {
                         name,
                         symbol,
                         last_updated_block)
-                    VALUES ($1, 'ERC721', $2, $3, $4)
+                    VALUES ($1, 'ERC1155', $2, $3, $4)
+                    RETURNING id
                 "#,
                     event.contract_address.to_string(),
                     name,
                     symbol,
                     block_number
                 )
-                .execute(&mut *transaction)
-                .await?;
+                .fetch_one(&mut *transaction)
+                .await?
+                .id
             }
+        };
 
-            let token_metadata_exists = sqlx::query!(
+        // Check if ERC1155 token record exists for given token id
+        let erc1155_token_exists = sqlx::query!(
+            r#"
+                SELECT EXISTS(
+                    SELECT * FROM erc1155_token
+                    WHERE contract_address = $1 AND
+                    token_id_low = $2 AND
+                    token_id_high = $3
+                )
+            "#,
+            event.contract_address.to_string(),
+            event.token_id.low.to_string(),
+            event.token_id.high.to_string(),
+        )
+        .fetch_one(&mut *transaction)
+        .await?
+        .exists
+        .unwrap_or_default();
+
+        // If there's no ERC1155 record, create a new one
+        if !erc1155_token_exists {
+            sqlx::query!(
                 r#"
-                    SELECT EXISTS (
-                        SELECT * 
-                        FROM token_metadata
-                        WHERE 
-                            contract_address = $1 AND
-                            contract_type = 'ERC721'
+                    INSERT INTO erc1155_token(
+                        contract_id,
+                        contract_address,
+                        token_id_low,
+                        token_id_high,
+                        token_uri,
+                        last_updated_block
                     )
+                    VALUES($1, $2, $3, $4, $5, $6)
                 "#,
-                event.contract_address.to_string()
-            )
-            .fetch_one(&mut *transaction)
-            .await?
-            .exists
-            .unwrap_or_default();
-
-            if !token_metadata_exists {
-                self::fetch_and_insert_metadata(event, rpc, &mut *transaction).await?;
-            }
-        } else {
-            let balance_record = sqlx::query!(
-                r#"
-                    SELECT id, balance_low, balance_high
-                    FROM erc1155_balances
-                    WHERE 
-                        contract_address = $1 AND 
-                        token_id_low = $2 AND
-                        token_id_high = $3 AND
-                        account = $4
-                "#,
+                contract_metadata_id,
                 event.contract_address.to_string(),
                 event.token_id.low.to_string(),
                 event.token_id.high.to_string(),
-                event.sender.to_string()
+                token_uri,
+                i64::try_from(event.block_number).unwrap()
             )
-            .fetch_one(&mut *transaction)
-            .await
-            .ok();
+            .execute(&mut *transaction)
+            .await?;
+        }
 
-            match balance_record {
-                Some(record) => {
-                    let before_balance = CairoUint256::new(
-                        FieldElement::from_dec_str(&record.balance_low)
-                            .expect("balance_low isn't a felt"),
-                        FieldElement::from_dec_str(&record.balance_high)
-                            .expect("balance_high isn't a felt"),
-                    );
-                    let new_balance = before_balance - event.amount;
+        Ok(())
+    }
 
-                    sqlx::query!(
-                        r#"
-                            UPDATE erc1155_balances
-                            SET balance_low = $1, balance_high = $2
-                            WHERE id = $3
-                        "#,
-                        new_balance.low.to_string(),
-                        new_balance.high.to_string(),
-                        record.id
-                    )
-                    .execute(&mut *transaction)
-                    .await?;
-                }
-                None => {
-                    println!("Impossible state, from balance 0");
-                }
+    pub async fn process_transfer(
+        event: &Erc1155TransferSingle,
+        transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> eyre::Result<()> {
+        let block_number = i64::try_from(event.block_number).unwrap();
+
+        // Get the corresponding ERC1155 token id
+        let token_id = sqlx::query!(
+            r#"
+                SELECT id
+                FROM erc1155_token
+                WHERE
+                    contract_address = $1 AND 
+                    token_id_low = $2 AND
+                    token_id_high = $3
+            "#,
+            event.contract_address.to_string(),
+            event.token_id.low.to_string(),
+            event.token_id.high.to_string(),
+        )
+        .fetch_one(&mut *transaction)
+        .await
+        .map(|record| record.id);
+
+        let token_id = match token_id {
+            Ok(record) => record,
+            Err(_) => eyre::bail!("no matching token in db"),
+        };
+
+        // First, update from balance
+        let balance_record = sqlx::query!(
+            r#"
+                SELECT id, balance_low, balance_high
+                FROM erc1155_balances
+                WHERE erc1155_id = $1 AND
+                account = $2
+            "#,
+            token_id,
+            event.sender.to_string()
+        )
+        .fetch_one(&mut *transaction)
+        .await
+        .ok();
+
+        match balance_record {
+            Some(record) => {
+                let before_balance = CairoUint256::new(
+                    FieldElement::from_dec_str(&record.balance_low)
+                        .expect("balance_low isn't a felt"),
+                    FieldElement::from_dec_str(&record.balance_high)
+                        .expect("balance_high isn't a felt"),
+                );
+                let new_balance = before_balance - event.amount;
+
+                sqlx::query!(
+                    r#"
+                        UPDATE erc1155_balances
+                        SET balance_low = $1, balance_high = $2
+                        WHERE id = $3
+                    "#,
+                    new_balance.low.to_string(),
+                    new_balance.high.to_string(),
+                    record.id
+                )
+                .execute(&mut *transaction)
+                .await?;
+            }
+            None => {
+                println!("Impossible state, from balance 0");
             }
         }
 
@@ -210,15 +269,10 @@ pub mod process_event {
             r#"
                 SELECT id, balance_low, balance_high
                 FROM erc1155_balances
-                WHERE 
-                    contract_address = $1 AND 
-                    token_id_low = $2 AND
-                    token_id_high = $3 AND
-                    account = $4
+                WHERE erc1155_id = $1 AND
+                account = $2
             "#,
-            event.contract_address.to_string(),
-            event.token_id.low.to_string(),
-            event.token_id.high.to_string(),
+            token_id,
             event.recipient.to_string()
         )
         .fetch_one(&mut *transaction)
@@ -255,18 +309,14 @@ pub mod process_event {
                 sqlx::query!(
                     r#"
                         INSERT INTO erc1155_balances(
-                            contract_address,
-                            token_id_low,
-                            token_id_high,
+                            erc1155_id,
                             account,
                             balance_low,
                             balance_high,
                             last_updated_block)
-                        VALUES ($1, $2, $3, $4, $5, $6, $7)
+                        VALUES ($1, $2, $3, $4, $5)
                     "#,
-                    event.contract_address.to_string(),
-                    event.token_id.low.to_string(),
-                    event.token_id.high.to_string(),
+                    token_id,
                     event.recipient.to_string(),
                     event.amount.low.to_string(),
                     event.amount.high.to_string(),
@@ -284,9 +334,8 @@ pub mod process_event {
         event: &Erc1155TransferSingle,
         rpc: &JsonRpcClient<HttpTransport>,
         transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    ) -> eyre::Result<()> {
+    ) -> eyre::Result<String> {
         let block_id = BlockId::Number(event.block_number);
-
         let token_uri =
             token::get_erc1155_uri(event.contract_address.0, &block_id, rpc, event.token_id).await;
         let metadata_result = token::get_token_metadata(&token_uri).await;
@@ -356,6 +405,6 @@ pub mod process_event {
             }
         }
 
-        Ok(())
+        Ok(token_uri)
     }
 }

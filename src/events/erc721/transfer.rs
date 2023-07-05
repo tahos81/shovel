@@ -1,5 +1,5 @@
 use crate::{common::types::CairoUint256, events::HexFieldElement};
-use starknet::{core::types::FieldElement, providers::jsonrpc::models::EmittedEvent};
+use starknet::{core::types::{FieldElement, EmittedEvent}};
 
 #[derive(Debug, Clone)]
 pub struct Erc721Transfer {
@@ -47,8 +47,8 @@ pub mod process_event {
     use color_eyre::eyre;
     use sqlx::{Postgres, Transaction};
     use starknet::{
-        core::types::FieldElement,
-        providers::jsonrpc::{models::BlockId, HttpTransport, JsonRpcClient},
+        core::types::{FieldElement, BlockId},
+        providers::jsonrpc::{HttpTransport, JsonRpcClient},
     };
 
     use super::Erc721Transfer;
@@ -77,7 +77,6 @@ pub mod process_event {
         }
     }
 
-    #[inline]
     pub async fn process_mint(
         event: &Erc721Transfer,
         rpc: &JsonRpcClient<HttpTransport>,
@@ -89,33 +88,30 @@ pub mod process_event {
         println!("[process_mint] got uri {:?} for token #{}", token_uri, event.token_id.low);
 
         // Check contract metadata
-        let contract_metadata_exists = sqlx::query!(
+        let contract_metadata_id = sqlx::query!(
             r#"
-                SELECT EXISTS (
-                    SELECT * 
-                    FROM contract_metadata 
-                    WHERE
-                        contract_address = $1 AND
-                        contract_type = 'ERC721'
-                )
+                SELECT id
+                FROM contract_metadata 
+                WHERE
+                    contract_address = $1 AND
+                    contract_type = 'ERC721'
             "#,
             event.contract_address.to_string()
         )
         .fetch_one(&mut *transaction)
-        .await?
-        .exists
-        .unwrap_or_default();
+        .await
+        .map(|record| record.id);
 
-        println!("[process_mint] contract_metadata_exists: {contract_metadata_exists:?}");
+        let contract_metadata_id = match contract_metadata_id {
+            Ok(id) => id,
+            Err(_) => {
+                println!("[process_mint] no metadata found, inserting a new one");
+                let name = contract::get_name(event.contract_address.0, &block_id, rpc).await;
+                let symbol = contract::get_symbol(event.contract_address.0, &block_id, rpc).await;
+                println!("[process_mint] name: {}, symbol: {}", &name, &symbol);
 
-        if !contract_metadata_exists {
-            println!("[process_mint] no metadata found, inserting a new one");
-            let name = contract::get_name(event.contract_address.0, &block_id, rpc).await;
-            let symbol = contract::get_symbol(event.contract_address.0, &block_id, rpc).await;
-            println!("[process_mint] name: {}, symbol: {}", &name, &symbol);
-
-            sqlx::query!(
-                r#"
+                sqlx::query!(
+                    r#"
                     INSERT INTO contract_metadata(
                         contract_address,
                         contract_type,
@@ -123,30 +119,35 @@ pub mod process_event {
                         symbol,
                         last_updated_block)
                     VALUES ($1, 'ERC721', $2, $3, $4)
+                    RETURNING id
                 "#,
-                event.contract_address.to_string(),
-                name,
-                symbol,
-                block_number
-            )
-            .execute(&mut *transaction)
-            .await?;
-        }
+                    event.contract_address.to_string(),
+                    name,
+                    symbol,
+                    block_number
+                )
+                .fetch_one(&mut *transaction)
+                .await?
+                .id
+            }
+        };
 
         // Insert Erc721 data
         let inserted_id = sqlx::query!(
             r#"
-                INSERT INTO erc721_data(
+                INSERT INTO erc721_token(
                     contract_address,
+                    contract_id,
                     token_id_low,
                     token_id_high,
                     latest_owner,
                     token_uri,
                     last_updated_block)
-                VALUES ($1, $2, $3, $4, $5, $6)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING id
             "#,
             event.contract_address.to_string(),
+            contract_metadata_id,
             event.token_id.low.to_string(),
             event.token_id.high.to_string(),
             event.recipient.to_string(),
@@ -173,7 +174,6 @@ pub mod process_event {
         Ok(())
     }
 
-    #[inline]
     pub async fn process_transfer(
         event: &Erc721Transfer,
         transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
@@ -183,12 +183,12 @@ pub mod process_event {
         // Find the ERC721 entry with given contract address and id
         let erc721_id = sqlx::query!(
             r#"
-            SELECT id
-            FROM erc721_data
-            WHERE
-                contract_address = $1 AND
-                token_id_low = $2 AND
-                token_id_high = $3
+                SELECT id
+                FROM erc721_token
+                WHERE
+                    contract_address = $1 AND
+                    token_id_low = $2 AND
+                    token_id_high = $3
             "#,
             event.contract_address.to_string(),
             event.token_id.low.to_string(),
@@ -202,7 +202,7 @@ pub mod process_event {
             Err(_) => {
                 sqlx::query!(
                     r#"
-                        INSERT INTO erc721_data(
+                        INSERT INTO erc721_token(
                             contract_address,
                             token_id_low,
                             token_id_high,
@@ -228,7 +228,7 @@ pub mod process_event {
         // Update latest owner
         sqlx::query!(
             r#"
-                UPDATE erc721_data
+                UPDATE erc721_token
                 SET latest_owner = $1, last_updated_block = $2
                 WHERE id = $3
             "#,
@@ -255,7 +255,13 @@ pub mod process_event {
         Ok(())
     }
 
-    #[inline]
+    /// Fetches metadata for given event's token ID and insert a new metadata record for it
+    ///
+    /// Returns token URI
+    ///
+    /// # Panics
+    ///
+    /// Panics if database reads or insertions fail
     async fn fetch_and_insert_metadata(
         event: &Erc721Transfer,
         rpc: &JsonRpcClient<HttpTransport>,

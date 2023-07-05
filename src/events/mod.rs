@@ -6,13 +6,10 @@ use color_eyre::eyre;
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Postgres};
 use starknet::{
-    core::types::FieldElement,
-    providers::jsonrpc::{
-        models::{BlockId, EmittedEvent},
-        HttpTransport, JsonRpcClient,
-    },
+    core::types::{BlockId, EmittedEvent, FieldElement},
+    providers::jsonrpc::{HttpTransport, JsonRpcClient},
 };
-use std::str::FromStr;
+use std::{str::FromStr, default};
 
 use crate::{
     common::starknet_constants::{
@@ -98,11 +95,12 @@ impl<'a> EventHandler<'a> {
         EventHandler { rpc, pool }
     }
 
-    pub async fn read_events(
+    pub async fn read_events<'fi>(
         &self,
         batch_id: u64,
         from_block_number: u64,
         events: &[EmittedEvent],
+        filter: EventFilter<'fi>
     ) -> eyre::Result<EventBatch> {
         let mut event_infos = Vec::<Event>::new();
 
@@ -110,6 +108,14 @@ impl<'a> EventHandler<'a> {
         // If it fails, ignore the error; most likely the contract is erc20 and
         // we don't want to index them atm
         for event in events {
+            // If we're using whitelist, skip the events that don't 
+            if let EventFilter::Whitelist(whitelist) = filter {
+                if !whitelist.contains(&event.from_address) {
+                    continue;
+                }
+            }
+
+
             if let Ok(event_info) = self.read_event(event).await {
                 event_infos.push(event_info);
             }
@@ -213,4 +219,11 @@ impl PartialEq<FieldElement> for HexFieldElement {
     fn eq(&self, other: &FieldElement) -> bool {
         self.0 == *other
     }
+}
+
+#[derive(Debug, Default)]
+pub enum EventFilter<'a> {
+    #[default]
+    All,
+    Whitelist(&'a [FieldElement])
 }

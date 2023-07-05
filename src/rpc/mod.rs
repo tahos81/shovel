@@ -7,10 +7,10 @@ use crate::common::{
 use color_eyre::eyre::Result;
 use reqwest::Url;
 use starknet::{
-    core::types::FieldElement,
-    providers::jsonrpc::{
-        models::{BlockId, EmittedEvent, EventFilter, EventsPage},
-        HttpTransport, JsonRpcClient,
+    core::types::{BlockId, EmittedEvent, EventFilter, EventsPage, FieldElement},
+    providers::{
+        jsonrpc::{HttpTransport, JsonRpcClient},
+        Provider,
     },
 };
 use std::env;
@@ -40,7 +40,7 @@ impl StarknetRpc {
             from_block: Some(BlockId::Number(start_block)),
             to_block: Some(BlockId::Number(start_block + range)),
             address: None,
-            keys: Some(keys),
+            keys: Some(vec![keys]),
         };
 
         let mut continuation_token: Option<String> = None;
@@ -53,16 +53,18 @@ impl StarknetRpc {
         loop {
             // TODO: Loop until we get a response from the rpc client, it is reasonable
             // to add a MAX_ITER here
-            get_events_resp = if let Ok(events_response) = self
+            get_events_resp = match self
                 .0
                 .get_events(transfer_filter.clone(), continuation_token.clone(), chunk_size)
                 .await
             {
-                events_response
-            } else {
-                tries += 1;
-                println!("[rpc] error while getting events, retrying #{tries}");
-                continue;
+                Ok(events_response) => events_response,
+                Err(e) => {
+                    eprintln!("Error: {e}");
+                    tries += 1;
+                    println!("[rpc] error while getting events, retrying #{tries}");
+                    continue;
+                }
             };
 
             println!("[rpc] got {} events", get_events_resp.events.len());
