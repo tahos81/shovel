@@ -114,8 +114,6 @@ pub mod process_event {
         .await
         .map(|record| record.id);
 
-        println!("[process_mint] contract_metadata_exists: {contract_metadata_id:?}");
-
         // If no contract metadata exists, insert a new record, or use the existing one
         let contract_metadata_id = match contract_metadata_id {
             Ok(id) => id,

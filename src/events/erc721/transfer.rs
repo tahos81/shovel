@@ -102,8 +102,6 @@ pub mod process_event {
         .await
         .map(|record| record.id);
 
-        println!("[process_mint] contract_metadata_exists: {contract_metadata_id:?}");
-
         let contract_metadata_id = match contract_metadata_id {
             Ok(id) => id,
             Err(_) => {

@@ -3,7 +3,7 @@ CREATE TYPE t_contract_type AS ENUM ('ERC721', 'ERC1155');
 CREATE TABLE contract_metadata(
   "id" INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   "contract_address" VARCHAR(80) NOT NULL,
-  "owner" VARCHAR(80) NOT NULL,
+  "owner" VARCHAR(80),
   "contract_type" t_contract_type NOT NULL,
   "name" TEXT,
   "symbol" TEXT,
