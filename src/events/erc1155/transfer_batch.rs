@@ -1,5 +1,5 @@
 use crate::{common::types::CairoUint256, events::HexFieldElement};
-use starknet::{core::types::FieldElement, providers::jsonrpc::models::EmittedEvent};
+use starknet::core::types::{FieldElement, EmittedEvent};
 
 #[derive(Debug, Clone)]
 pub struct Erc1155TransferBatch {

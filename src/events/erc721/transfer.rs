@@ -1,5 +1,5 @@
 use crate::{common::types::CairoUint256, events::HexFieldElement};
-use starknet::{core::types::FieldElement, providers::jsonrpc::models::EmittedEvent};
+use starknet::{core::types::{FieldElement, EmittedEvent}};
 
 #[derive(Debug, Clone)]
 pub struct Erc721Transfer {
@@ -47,8 +47,8 @@ pub mod process_event {
     use color_eyre::eyre;
     use sqlx::{Postgres, Transaction};
     use starknet::{
-        core::types::FieldElement,
-        providers::jsonrpc::{models::BlockId, HttpTransport, JsonRpcClient},
+        core::types::{FieldElement, BlockId},
+        providers::jsonrpc::{HttpTransport, JsonRpcClient},
     };
 
     use super::Erc721Transfer;

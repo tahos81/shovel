@@ -1,5 +1,5 @@
 use crate::{common::types::CairoUint256, events::HexFieldElement};
-use starknet::{core::types::FieldElement, providers::jsonrpc::models::EmittedEvent};
+use starknet::core::types::{EmittedEvent, FieldElement};
 
 #[derive(Debug, Clone)]
 pub struct Erc1155TransferSingle {
@@ -57,8 +57,8 @@ pub mod process_event {
     use async_trait::async_trait;
     use color_eyre::eyre;
     use starknet::{
-        core::types::FieldElement,
-        providers::jsonrpc::{models::BlockId, HttpTransport, JsonRpcClient},
+        core::types::{BlockId, FieldElement},
+        providers::jsonrpc::{HttpTransport, JsonRpcClient},
     };
 
     use crate::{

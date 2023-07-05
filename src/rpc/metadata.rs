@@ -5,16 +5,16 @@ pub mod token {
         types::CairoUint256,
     };
     use base64::{engine::general_purpose, Engine as _};
-    use color_eyre::eyre::Result;
+    use color_eyre::eyre;
     use reqwest::Client;
     use serde::{Deserialize, Serialize};
     use serde_json::Number;
     use starknet::{
-        core::types::FieldElement,
+        core::types::{BlockId, FieldElement, FunctionCall},
         macros::selector,
-        providers::jsonrpc::{
-            models::{BlockId, FunctionCall},
-            HttpTransport, JsonRpcClient,
+        providers::{
+            jsonrpc::{HttpTransport, JsonRpcClient},
+            Provider,
         },
     };
     use std::env;
@@ -137,7 +137,7 @@ pub mod token {
     }
 
     /// Gets token metadata for a given uri
-    pub async fn get_token_metadata(uri: &str) -> Result<TokenMetadata> {
+    pub async fn get_token_metadata(uri: &str) -> eyre::Result<TokenMetadata> {
         let client = Client::new();
 
         let metadata_type = get_metadata_type(uri);
@@ -149,7 +149,7 @@ pub mod token {
         }
     }
 
-    async fn get_ipfs_metadata(uri: &str, client: &Client) -> Result<TokenMetadata> {
+    async fn get_ipfs_metadata(uri: &str, client: &Client) -> eyre::Result<TokenMetadata> {
         let username = env::var("IPFS_USERNAME")?;
         let password = env::var("IPFS_PASSWORD")?;
 
@@ -163,13 +163,13 @@ pub mod token {
         Ok(metadata)
     }
 
-    async fn get_http_metadata(uri: &str, client: &Client) -> Result<TokenMetadata> {
+    async fn get_http_metadata(uri: &str, client: &Client) -> eyre::Result<TokenMetadata> {
         let resp = client.get(uri).send().await?;
         let metadata: TokenMetadata = resp.json().await?;
         Ok(metadata)
     }
 
-    fn get_onchain_metadata(uri: &str) -> Result<TokenMetadata> {
+    fn get_onchain_metadata(uri: &str) -> eyre::Result<TokenMetadata> {
         // Try to split from the comma as it is the standard with on chain metadata
         let url_encoded = urlencoding::decode(uri).map(|s| String::from(s.as_ref()));
         let uri_string = match url_encoded {
@@ -214,13 +214,12 @@ pub mod token {
 pub mod contract {
     use crate::common::starknet_constants::{NAME_SELECTOR, SYMBOL_SELECTOR, ZERO_FELT};
     use crate::common::traits::ToUtf8String;
-    use color_eyre::eyre::Result;
+    use color_eyre::eyre;
+    use starknet::core::types::{ContractClass, LegacyContractAbiEntry};
+    use starknet::providers::Provider;
     use starknet::{
-        core::types::FieldElement,
-        providers::jsonrpc::{
-            models::{BlockId, ContractAbiEntry::Function, FunctionCall},
-            HttpTransport, JsonRpcClient,
-        },
+        core::types::{BlockId, FieldElement, FunctionCall},
+        providers::jsonrpc::{HttpTransport, JsonRpcClient},
     };
 
     pub async fn get_name(
@@ -264,14 +263,19 @@ pub mod contract {
         address: FieldElement,
         block_id: &BlockId,
         rpc: &JsonRpcClient<HttpTransport>,
-    ) -> Result<bool> {
-        let Some(abi) = rpc.get_class_at(block_id, address).await?.abi else {
+    ) -> eyre::Result<bool> {
+        let abi = match rpc.get_class_at(block_id, address).await? {
+            ContractClass::Sierra(_) => eyre::bail!("sierra not supported yet"),
+            ContractClass::Legacy(leg) => leg.abi
+        };
+
+        let Some(abi) = abi else {
             return Ok(false);
         };
 
         // Simplest check we can do is to check "ownerOf" function.
         for abi_entry in abi {
-            if let Function(function_abi_entry) = abi_entry {
+            if let LegacyContractAbiEntry::Function(function_abi_entry) = abi_entry {
                 if function_abi_entry.name == "ownerOf" || function_abi_entry.name == "owner_of" {
                     return Ok(true);
                 }

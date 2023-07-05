@@ -6,11 +6,8 @@ use color_eyre::eyre;
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Postgres};
 use starknet::{
-    core::types::FieldElement,
-    providers::jsonrpc::{
-        models::{BlockId, EmittedEvent},
-        HttpTransport, JsonRpcClient,
-    },
+    core::types::{BlockId, EmittedEvent, FieldElement},
+    providers::jsonrpc::{HttpTransport, JsonRpcClient},
 };
 use std::str::FromStr;
 
