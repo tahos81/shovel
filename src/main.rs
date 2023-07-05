@@ -70,6 +70,15 @@ async fn main() -> eyre::Result<()> {
                 };
 
                 let from_block = start_block + BLOCK_RANGE * current_batch_id;
+
+                loop {
+                    if let Ok(current_block) = rpc.inner().block_number().await {
+                        if current_block >= from_block + BLOCK_RANGE {
+                            break;
+                        }
+                    }
+                }
+
                 println!(
                     "[tx-{}] reading between {}-{}, batch id: {}",
                     thread_id,
