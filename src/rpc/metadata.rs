@@ -10,7 +10,7 @@ pub mod token {
     use serde::{Deserialize, Serialize};
     use serde_json::Number;
     use starknet::{
-        core::types::{BlockId, FieldElement, FunctionCall},
+        core::types::{BlockId, BlockTag, FieldElement, FunctionCall},
         macros::selector,
         providers::{
             jsonrpc::{HttpTransport, JsonRpcClient},
@@ -68,7 +68,6 @@ pub mod token {
     /// Gets the token URI for a given token ID
     pub async fn get_erc721_uri(
         address: FieldElement,
-        block_id: &BlockId,
         rpc: &JsonRpcClient<HttpTransport>,
         token_id: CairoUint256,
     ) -> String {
@@ -80,7 +79,7 @@ pub mod token {
             calldata: vec![token_id.low, token_id.high],
         };
 
-        let Ok(token_uri_response) = rpc.call(request, block_id).await else {
+        let Ok(token_uri_response) = rpc.call(request, BlockId::Tag(BlockTag::Latest)).await else {
             return String::new();
         };
 
@@ -97,7 +96,6 @@ pub mod token {
 
     pub async fn get_erc1155_uri(
         address: FieldElement,
-        block_id: &BlockId,
         rpc: &JsonRpcClient<HttpTransport>,
         token_id: CairoUint256,
     ) -> String {
@@ -113,7 +111,7 @@ pub mod token {
                 calldata: vec![token_id.low, token_id.high],
             };
 
-            if let Ok(felt_array) = rpc.call(request, block_id).await {
+            if let Ok(felt_array) = rpc.call(request, BlockId::Tag(BlockTag::Latest)).await {
                 token_uri_response = Some(felt_array);
                 break;
             };
