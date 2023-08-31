@@ -335,9 +335,8 @@ pub mod process_event {
         rpc: &JsonRpcClient<HttpTransport>,
         transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     ) -> eyre::Result<String> {
-        let block_id = BlockId::Number(event.block_number);
         let token_uri =
-            token::get_erc1155_uri(event.contract_address.0, &block_id, rpc, event.token_id).await;
+            token::get_erc1155_uri(event.contract_address.0, rpc, event.token_id).await;
         let metadata_result = token::get_token_metadata(&token_uri).await;
         let metadata = match metadata_result {
             Ok(metadata) => metadata,
